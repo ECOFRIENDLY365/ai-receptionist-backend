@@ -30,7 +30,7 @@ app.get('/health', (req, res) => {
 app.get('/api/test', async (req, res) => {
   try {
     const { data, error } = await supabase
-      .from('your_table_name')
+      .from('Contacts')
       .select('*')
       .limit(1);
 
