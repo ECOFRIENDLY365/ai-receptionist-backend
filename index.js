@@ -1,11 +1,12 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { handleReceptionistCall } from './services/receptionist.js';
 
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 8080;
 
 // Initialize Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -37,6 +38,23 @@ app.get('/api/test', async (req, res) => {
     if (error) throw error;
 
     res.json({ success: true, data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Receptionist endpoint
+app.post('/receptionist', async (req, res) => {
+  try {
+    const { message } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    const response = await handleReceptionistCall(message);
+
+    res.json({ success: true, response });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
