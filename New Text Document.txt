@@ -1,0 +1,11 @@
+const { handleReceptionistCall } = require('./services/receptionist');
+
+app.post('/api/receptionist', async (req, res) => {
+  try {
+    const { message } = req.body;
+    const response = await handleReceptionistCall(message);
+    res.json({ response });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
