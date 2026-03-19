@@ -104,13 +104,12 @@ wss.on("connection", (twilioWs, req) => {
   let greetingSent = false;
 
   function maybeSendGreeting() {
-  console.log("Attempting to send greeting", {
-    greetingSent,
-    sessionReady,
-    streamSid,
-    openaiReadyState: openaiWs?.readyState,
-  });
-
+console.log("maybeSendGreeting called", {
+  greetingSent,
+  sessionReady,
+  streamSid,
+  openaiReadyState: openaiWs?.readyState
+});
   if (
     greetingSent ||
     !sessionReady ||
@@ -238,6 +237,9 @@ Important:
     if (msg.type === "session.updated") {
       console.log("OpenAI session is ready");
       sessionReady = true;
+
+      console.log("Calling maybeSendGreeting from session.updated");      
+
       maybeSendGreeting();
     }
 
