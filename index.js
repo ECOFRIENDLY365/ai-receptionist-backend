@@ -98,12 +98,19 @@ wss.on("connection", (twilioWs, req) => {
     userAgent: req.headers["user-agent"],
   });
 
-let streamSid = null;
-let openaiWs = null;
-let sessionReady = false;
-let greetingSent = false;
+  let streamSid = null;
+  let openaiWs = null;
+  let sessionReady = false;
+  let greetingSent = false;
 
   function maybeSendGreeting() {
+    console.log("Attempting to send greeting", {
+      greetingSent,
+      sessionReady,
+      streamSid,
+      openaiReadyState: openaiWs?.readyState,
+    });
+
     if (
       greetingSent ||
       !sessionReady ||
@@ -116,22 +123,20 @@ let greetingSent = false;
 
     greetingSent = true;
 
-    openaiWs.send(JSON.stringify({
-      type: "conversation.item.create",
-      item: {
-        type: "message",
-        role: "assistant",
-        content: [
-          {
-            type: "output_text",
-            text: "Good morning, thanks for calling Pizza Express. How can I help?"
-          }
-        ]
-      }
-    }));
+    console.log("Sending AI greeting");
 
     openaiWs.send(JSON.stringify({
-      type: "response.create"
+      type: "response.create",
+      response: {
+        modalities: ["audio"],
+        instructions: "Say: Hello, thank you for calling Pizza Express. How can I help?",
+        audio: {
+          output: {
+            format: { type: "audio/pcmu" },
+            voice: "marin",
+          },
+        },
+      },
     }));
   }
 
@@ -140,8 +145,9 @@ let greetingSent = false;
       "wss://api.openai.com/v1/realtime?model=gpt-realtime",
       {
         headers: {
-          Authorization: `Bearer ${openaiApiKey}`,
-        },
+  Authorization: `Bearer ${openaiApiKey}`,
+  "OpenAI-Beta": "realtime=v1",
+},
       }
     );
   } catch (err) {
@@ -229,42 +235,45 @@ Important:
   });
 
   openaiWs.on("message", (data) => {
-    try {
-      const msg = JSON.parse(data.toString());
+  try {
+    const msg = JSON.parse(data.toString());
+
+    if (
+      msg.type === "session.created" ||
+      msg.type === "session.updated" ||
+      msg.type === "response.created" ||
+      msg.type === "response.done" ||
+      msg.type === "error"
+    ) {
+      console.log("OpenAI event:", msg.type, msg);
+    }
+
+    if (msg.type === "session.updated") {
+      console.log("OpenAI session is ready");
+      sessionReady = true;
+      maybeSendGreeting();
+    }
+
+    if (msg.type === "response.output_audio.delta") {
+      console.log("OpenAI audio delta received");
 
       if (
-        msg.type === "session.created" ||
-        msg.type === "session.updated" ||
-        msg.type === "response.created" ||
-        msg.type === "response.done" ||
-        msg.type === "error"
-      ) {
-        console.log("OpenAI event:", msg.type, msg);
-      }
-
-      if (msg.type === "session.updated") {
-       console.log("OpenAI session is ready");
-       sessionReady = true;
-       maybeSendGreeting();
-      }
-
-
-      if (
-        msg.type === "response.output_audio.delta" &&
         msg.delta &&
         streamSid &&
         twilioWs.readyState === WebSocket.OPEN
       ) {
+        console.log("forwarding audio to Twilio");
         twilioWs.send(JSON.stringify({
           event: "media",
           streamSid,
           media: { payload: msg.delta },
         }));
       }
-    } catch (err) {
-      console.error("Error parsing OpenAI message:", err);
     }
-  });
+  } catch (err) {
+    console.error("Error parsing OpenAI message:", err);
+  }
+});
 
   openaiWs.on("close", (code, reason) => {
     console.log("OpenAI WebSocket closed", {
@@ -281,19 +290,21 @@ Important:
     try {
       const msg = JSON.parse(message.toString());
 
+      console.log("Twilio event:", msg.event);
+
       if (msg.event === "connected") {
         console.log("Twilio connected event");
       }
 
       if (msg.event === "start") {
-        streamSid = msg.start.streamSid;
-        console.log("Twilio stream started:", {
-          streamSid,
-          callSid: msg.start.callSid,
-        });
+  streamSid = msg.start.streamSid;
+  console.log("Twilio stream started:", {
+    streamSid,
+    callSid: msg.start.callSid,
+  });
 
-        maybeSendGreeting();
-      }
+  maybeSendGreeting();
+}
 
       if (msg.event === "media") {
         if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
