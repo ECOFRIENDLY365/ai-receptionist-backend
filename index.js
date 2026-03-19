@@ -161,7 +161,7 @@ wss.on("connection", (twilioWs, req) => {
   openaiWs.on("open", () => {
     console.log("Connected to OpenAI Realtime");
 
-    const event = {
+const event = {
   type: "session.update",
   session: {
     instructions: `
@@ -207,25 +207,19 @@ Important:
 - do not fill silence unnecessarily
 - most replies should be one or two short sentences
     `,
-    audio: {
-      input: {
-        format: { type: "audio/pcmu" },
-        noise_reduction: { type: "far_field" },
-        turn_detection: {
-          type: "server_vad",
-          create_response: true,
-          interrupt_response: false,
-          threshold: 0.65,
-          prefix_padding_ms: 300,
-          silence_duration_ms: 900,
-        },
-      },
-      output: {
-        format: { type: "audio/pcmu" },
-        voice: "marin",
-      },
-    },
-  },
+    modalities: ["audio", "text"],
+    input_audio_format: "g711_ulaw",
+    output_audio_format: "g711_ulaw",
+    voice: "alloy",
+    turn_detection: {
+      type: "server_vad",
+      threshold: 0.65,
+      prefix_padding_ms: 300,
+      silence_duration_ms: 900,
+      create_response: true,
+      interrupt_response: false
+    }
+  }
 };
 
     console.log("Sending session.update");
