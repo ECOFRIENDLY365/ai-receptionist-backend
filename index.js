@@ -162,10 +162,9 @@ wss.on("connection", (twilioWs, req) => {
     console.log("Connected to OpenAI Realtime");
 
     const event = {
-      type: "session.update",
-      session: {
-        type: "realtime",
-        instructions: `
+  type: "session.update",
+  session: {
+    instructions: `
 You are the warm, professional phone receptionist for Pizza Express.
 
 Your role:
@@ -207,27 +206,27 @@ Important:
 - do not restart after interruptions
 - do not fill silence unnecessarily
 - most replies should be one or two short sentences
-        `,
-        audio: {
-          input: {
-            format: { type: "audio/pcmu" },
-            noise_reduction: { type: "far_field" },
-            turn_detection: {
-              type: "server_vad",
-              create_response: true,
-              interrupt_response: false,
-              threshold: 0.65,
-              prefix_padding_ms: 300,
-              silence_duration_ms: 900,
-            },
-          },
-          output: {
-            format: { type: "audio/pcmu" },
-            voice: "marin",
-          },
+    `,
+    audio: {
+      input: {
+        format: { type: "audio/pcmu" },
+        noise_reduction: { type: "far_field" },
+        turn_detection: {
+          type: "server_vad",
+          create_response: true,
+          interrupt_response: false,
+          threshold: 0.65,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 900,
         },
       },
-    };
+      output: {
+        format: { type: "audio/pcmu" },
+        voice: "marin",
+      },
+    },
+  },
+};
 
     console.log("Sending session.update");
     openaiWs.send(JSON.stringify(event));
