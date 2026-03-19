@@ -76,10 +76,7 @@ app.post("/incoming-call", (req, res) => {
 
     const response = new twilio.twiml.VoiceResponse();
 
-    response.say(
-      { voice: "alice" },
-      "Please hold while I connect you."
-    );
+    response.say({ voice: "alice" }, "Please hold while I connect you.");
 
     const connect = response.connect();
     connect.stream({
@@ -130,8 +127,8 @@ wss.on("connection", (twilioWs, req) => {
       type: "session.update",
       session: {
         type: "realtime",
-        instructions:
-          "You are a professional AI receptionist for a business.
+        instructions: `
+You are a professional AI receptionist for a business.
 
 Your job is to:
 - greet callers warmly
@@ -140,9 +137,10 @@ Your job is to:
 - keep responses short and natural
 - confirm important details
 
-If you don’t know something, say a team member will follow up.
+If you do not know something, say a team member will follow up.
 
-Never sound robotic. Speak like a real receptionist..",
+Never sound robotic. Speak like a real receptionist.
+        `,
         audio: {
           input: {
             format: { type: "audio/pcmu" },
