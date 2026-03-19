@@ -104,7 +104,7 @@ wss.on("connection", (twilioWs, req) => {
   let greetingSent = false;
 
   function maybeSendGreeting() {
-  console.log("maybeSendGreeting called", {
+  console.log("=== maybeSendGreeting called ===", {
     greetingSent,
     sessionReady,
     streamSid,
@@ -118,7 +118,7 @@ wss.on("connection", (twilioWs, req) => {
     !openaiWs ||
     openaiWs.readyState !== WebSocket.OPEN
   ) {
-    console.log("Greeting blocked", {
+    console.log("=== Greeting blocked ===", {
       greetingSent,
       sessionReady,
       hasStreamSid: !!streamSid,
@@ -129,7 +129,7 @@ wss.on("connection", (twilioWs, req) => {
   }
 
   greetingSent = true;
-  console.log("Sending AI greeting");
+  console.log("=== Sending AI greeting ===");
 
   openaiWs.send(JSON.stringify({
     type: "response.create",
@@ -211,7 +211,7 @@ Important:
     modalities: ["audio", "text"],
     input_audio_format: "g711_ulaw",
     output_audio_format: "g711_ulaw",
-    voice: "alloy",
+    voice: "marin",
     turn_detection: {
       type: "server_vad",
       threshold: 0.65,
@@ -242,11 +242,17 @@ Important:
       console.log("OpenAI event:", msg.type, msg);
     }
 
-    if (msg.type === "session.updated") {
+if (msg.type === "session.updated") {
+  console.log("=== SESSION UPDATED ===");
   console.log("OpenAI session is ready");
   sessionReady = true;
   console.log("Calling maybeSendGreeting from session.updated");
   maybeSendGreeting();
+}
+
+    if (msg.type === "response.created") {
+      console.log("=== RESPONSE CREATED ===", msg.response?.id);
+
 }
 
     if (msg.type === "response.output_audio.delta") {
@@ -291,14 +297,13 @@ Important:
 
       if (msg.event === "start") {
   streamSid = msg.start.streamSid;
-  console.log("Twilio stream started:", {
+  console.log("=== TWILIO START ===", {
     streamSid,
     callSid: msg.start.callSid,
   });
 
   maybeSendGreeting();
 }
-
       if (msg.event === "media") {
         if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
           openaiWs.send(JSON.stringify({
