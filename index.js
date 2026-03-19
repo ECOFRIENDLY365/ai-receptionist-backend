@@ -7,6 +7,14 @@ import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION:", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("UNHANDLED REJECTION:", reason);
+});
+
 const app = express();
 const port = process.env.PORT || 8080;
 
@@ -18,19 +26,24 @@ const supabaseKey = process.env.SUPABASE_KEY;
 const openaiApiKey = process.env.OPENAI_API_KEY;
 const publicBaseUrl = process.env.PUBLIC_BASE_URL;
 
+console.log("Startup check:", {
+  hasSupabaseUrl: !!supabaseUrl,
+  hasSupabaseKey: !!supabaseKey,
+  hasOpenAiKey: !!openaiApiKey,
+  hasPublicBaseUrl: !!publicBaseUrl,
+  publicBaseUrl,
+});
+
 if (!supabaseUrl || !supabaseKey) {
-  console.error("Missing Supabase credentials");
-  process.exit(1);
+  throw new Error("Missing Supabase credentials");
 }
 
 if (!openaiApiKey) {
-  console.error("Missing OPENAI_API_KEY");
-  process.exit(1);
+  throw new Error("Missing OPENAI_API_KEY");
 }
 
 if (!publicBaseUrl) {
-  console.error("Missing PUBLIC_BASE_URL");
-  process.exit(1);
+  throw new Error("Missing PUBLIC_BASE_URL");
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -48,66 +61,114 @@ app.get("/api/test", async (req, res) => {
     if (error) throw error;
     res.json({ success: true, data });
   } catch (err) {
+    console.error("/api/test error:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
 app.post("/incoming-call", (req, res) => {
-  const response = new twilio.twiml.VoiceResponse();
-  const connect = response.connect();
+  try {
+    console.log("Incoming call webhook hit", {
+      from: req.body?.From,
+      to: req.body?.To,
+      callSid: req.body?.CallSid,
+    });
 
-  connect.stream({
-    url: `${publicBaseUrl.replace(/^http/, "ws")}/media-stream`,
-  });
+    const response = new twilio.twiml.VoiceResponse();
 
-  res.type("text/xml");
-  res.send(response.toString());
+    response.say(
+      { voice: "alice" },
+      "Please hold while I connect you."
+    );
+
+    const connect = response.connect();
+    connect.stream({
+      url: `${publicBaseUrl.replace(/^http/, "ws")}/media-stream`,
+    });
+
+    const twiml = response.toString();
+    console.log("Returning TwiML:", twiml);
+
+    res.type("text/xml");
+    res.send(twiml);
+  } catch (err) {
+    console.error("/incoming-call error:", err);
+    res.status(500).send("Webhook error");
+  }
 });
 
-wss.on("connection", (twilioWs) => {
-  console.log("Twilio media stream connected");
+wss.on("connection", (twilioWs, req) => {
+  console.log("Twilio media stream connected", {
+    url: req.url,
+    userAgent: req.headers["user-agent"],
+  });
 
   let streamSid = null;
+  let openaiWs = null;
 
-  const openaiWs = new WebSocket(
-    "wss://api.openai.com/v1/realtime?model=gpt-realtime",
-    {
-      headers: {
-        Authorization: `Bearer ${openaiApiKey}`,
-      },
-    }
-  );
+  try {
+    openaiWs = new WebSocket(
+      "wss://api.openai.com/v1/realtime?model=gpt-realtime",
+      {
+        headers: {
+          Authorization: `Bearer ${openaiApiKey}`,
+        },
+      }
+    );
+  } catch (err) {
+    console.error("Failed to create OpenAI websocket:", err);
+    try {
+      twilioWs.close();
+    } catch {}
+    return;
+  }
 
   openaiWs.on("open", () => {
     console.log("Connected to OpenAI Realtime");
 
-    openaiWs.send(
-      JSON.stringify({
-        type: "session.update",
-        session: {
-          type: "realtime",
-          instructions:
-            "You are a professional AI receptionist. Answer politely, collect caller details, and keep responses short and helpful.",
-          audio: {
-            input: {
-              format: { type: "audio/pcmu" },
-              turn_detection: { type: "server_vad" },
-            },
-            output: {
-              format: { type: "audio/pcmu" },
-              voice: "alloy",
-            },
+    const event = {
+      type: "session.update",
+      session: {
+        type: "realtime",
+        instructions:
+          "You are a professional AI receptionist. Answer politely, collect caller details, and keep responses short and helpful.",
+        audio: {
+          input: {
+            format: { type: "audio/pcmu" },
+            turn_detection: { type: "server_vad" },
+          },
+          output: {
+            format: { type: "audio/pcmu" },
+            voice: "alloy",
           },
         },
-      })
-    );
+      },
+    };
+
+    console.log("Sending session.update");
+    openaiWs.send(JSON.stringify(event));
   });
 
   openaiWs.on("message", (data) => {
     try {
       const msg = JSON.parse(data.toString());
 
-      if (msg.type === "response.output_audio.delta" && streamSid) {
+      if (
+        msg.type === "session.created" ||
+        msg.type === "session.updated" ||
+        msg.type === "response.created" ||
+        msg.type === "response.done" ||
+        msg.type === "error"
+      ) {
+        console.log("OpenAI event:", msg.type, msg);
+      }
+
+      if (
+        msg.type === "response.output_audio.delta" &&
+        msg.delta &&
+        streamSid &&
+        twilioWs.readyState === WebSocket.OPEN
+      ) {
         twilioWs.send(
           JSON.stringify({
             event: "media",
@@ -116,30 +177,40 @@ wss.on("connection", (twilioWs) => {
           })
         );
       }
-
-      if (msg.type === "error") {
-        console.error("OpenAI error:", msg);
-      }
     } catch (err) {
-      console.error("Error parsing OpenAI message:", err.message);
+      console.error("Error parsing OpenAI message:", err);
     }
   });
 
+  openaiWs.on("close", (code, reason) => {
+    console.log("OpenAI WebSocket closed", {
+      code,
+      reason: reason?.toString?.(),
+    });
+  });
+
   openaiWs.on("error", (err) => {
-    console.error("OpenAI WebSocket error:", err.message);
+    console.error("OpenAI WebSocket error:", err);
   });
 
   twilioWs.on("message", (message) => {
     try {
       const msg = JSON.parse(message.toString());
 
+      if (msg.event === "connected") {
+        console.log("Twilio connected event");
+      }
+
       if (msg.event === "start") {
         streamSid = msg.start.streamSid;
-        console.log("Stream started:", streamSid);
+        console.log("Twilio stream started:", {
+          streamSid,
+          callSid: msg.start.callSid,
+        });
       }
 
       if (msg.event === "media") {
-        if (openaiWs.readyState === WebSocket.OPEN) {
+        if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
           openaiWs.send(
             JSON.stringify({
               type: "input_audio_buffer.append",
@@ -150,20 +221,28 @@ wss.on("connection", (twilioWs) => {
       }
 
       if (msg.event === "stop") {
-        console.log("Stream stopped");
-        if (openaiWs.readyState === WebSocket.OPEN) {
+        console.log("Twilio stream stopped");
+        if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
           openaiWs.close();
         }
       }
     } catch (err) {
-      console.error("Error parsing Twilio message:", err.message);
+      console.error("Error parsing Twilio message:", err);
     }
   });
 
-  twilioWs.on("close", () => {
-    if (openaiWs.readyState === WebSocket.OPEN) {
+  twilioWs.on("close", (code, reason) => {
+    console.log("Twilio WebSocket closed", {
+      code,
+      reason: reason?.toString?.(),
+    });
+    if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
       openaiWs.close();
     }
+  });
+
+  twilioWs.on("error", (err) => {
+    console.error("Twilio WebSocket error:", err);
   });
 });
 
