@@ -290,8 +290,6 @@ Important:
     try {
       const msg = JSON.parse(message.toString());
 
-      console.log("Twilio event:", msg.event);
-
       if (msg.event === "connected") {
         console.log("Twilio connected event");
       }
