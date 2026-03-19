@@ -104,41 +104,35 @@ wss.on("connection", (twilioWs, req) => {
   let greetingSent = false;
 
   function maybeSendGreeting() {
-    console.log("Attempting to send greeting", {
-      greetingSent,
-      sessionReady,
-      streamSid,
-      openaiReadyState: openaiWs?.readyState,
-    });
+  console.log("Attempting to send greeting", {
+    greetingSent,
+    sessionReady,
+    streamSid,
+    openaiReadyState: openaiWs?.readyState,
+  });
 
-    if (
-      greetingSent ||
-      !sessionReady ||
-      !streamSid ||
-      !openaiWs ||
-      openaiWs.readyState !== WebSocket.OPEN
-    ) {
-      return;
-    }
-
-    greetingSent = true;
-
-    console.log("Sending AI greeting");
-
-    openaiWs.send(JSON.stringify({
-      type: "response.create",
-      response: {
-        modalities: ["audio"],
-        instructions: "Say: Hello, thank you for calling Pizza Express. How can I help?",
-        audio: {
-          output: {
-            format: { type: "audio/pcmu" },
-            voice: "marin",
-          },
-        },
-      },
-    }));
+  if (
+    greetingSent ||
+    !sessionReady ||
+    !streamSid ||
+    !openaiWs ||
+    openaiWs.readyState !== WebSocket.OPEN
+  ) {
+    return;
   }
+
+  greetingSent = true;
+
+  console.log("Sending AI greeting");
+
+  openaiWs.send(JSON.stringify({
+    type: "response.create",
+    response: {
+      modalities: ["audio", "text"],
+      instructions: "Say exactly: Hello, thank you for calling Pizza Express. How can I help you today?"
+    }
+  }));
+}
 
   try {
     openaiWs = new WebSocket(
