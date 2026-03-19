@@ -76,8 +76,6 @@ app.post("/incoming-call", (req, res) => {
 
     const response = new twilio.twiml.VoiceResponse();
 
-    response.say({ voice: "alice" }, "Please hold while I connect you.");
-
     const connect = response.connect();
     connect.stream({
       url: `${publicBaseUrl.replace(/^http/, "ws")}/media-stream`,
@@ -102,6 +100,40 @@ wss.on("connection", (twilioWs, req) => {
 
   let streamSid = null;
   let openaiWs = null;
+  let openaiReady = false;
+  let greetingSent = false;
+
+  function maybeSendGreeting() {
+    if (
+      greetingSent ||
+      !openaiReady ||
+      !streamSid ||
+      !openaiWs ||
+      openaiWs.readyState !== WebSocket.OPEN
+    ) {
+      return;
+    }
+
+    greetingSent = true;
+
+    openaiWs.send(JSON.stringify({
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "assistant",
+        content: [
+          {
+            type: "output_text",
+            text: "Good morning, thanks for calling Pizza Express. How can I help?"
+          }
+        ]
+      }
+    }));
+
+    openaiWs.send(JSON.stringify({
+      type: "response.create"
+    }));
+  }
 
   try {
     openaiWs = new WebSocket(
@@ -128,27 +160,64 @@ wss.on("connection", (twilioWs, req) => {
       session: {
         type: "realtime",
         instructions: `
-You are a professional AI receptionist for a business.
+You are the warm, professional phone receptionist for Pizza Express.
 
-Your job is to:
-- greet callers warmly
-- understand why they are calling
-- collect their name and phone number if needed
-- keep responses short and natural
-- confirm important details
+Your role:
+- greet callers naturally
+- find out why they are calling
+- help briefly and efficiently
+- take a clear message when needed
 
-If you do not know something, say a team member will follow up.
+Style:
+- sound human, calm, polished, and friendly
+- use short natural sentences
+- keep replies brief
+- ask one question at a time
+- do not sound robotic, scripted, or overly enthusiastic
+- do not say you are an AI unless asked directly
 
-Never sound robotic. Speak like a real receptionist.
+Turn-taking:
+- never interrupt the caller
+- if they pause briefly, wait
+- if they are still thinking, wait
+- do not speak over them
+- if interrupted, stop and listen
+- when they finish, reply briefly
+
+Call flow:
+- begin with a short friendly greeting
+- first understand the reason for the call
+- collect only the necessary details
+- if taking a message, get:
+  - full name
+  - phone number
+  - reason for calling
+  - preferred callback time if relevant
+- repeat phone numbers slowly when confirming
+- if something is unclear, ask only for the missing part
+
+Important:
+- do not repeat the greeting
+- do not restart after interruptions
+- do not fill silence unnecessarily
+- most replies should be one or two short sentences
         `,
         audio: {
           input: {
             format: { type: "audio/pcmu" },
-            turn_detection: { type: "server_vad" },
+            noise_reduction: { type: "far_field" },
+            turn_detection: {
+              type: "server_vad",
+              create_response: true,
+              interrupt_response: false,
+              threshold: 0.65,
+              prefix_padding_ms: 300,
+              silence_duration_ms: 900,
+            },
           },
           output: {
             format: { type: "audio/pcmu" },
-            voice: "alloy",
+            voice: "marin",
           },
         },
       },
@@ -156,6 +225,9 @@ Never sound robotic. Speak like a real receptionist.
 
     console.log("Sending session.update");
     openaiWs.send(JSON.stringify(event));
+
+    openaiReady = true;
+    maybeSendGreeting();
   });
 
   openaiWs.on("message", (data) => {
@@ -178,13 +250,11 @@ Never sound robotic. Speak like a real receptionist.
         streamSid &&
         twilioWs.readyState === WebSocket.OPEN
       ) {
-        twilioWs.send(
-          JSON.stringify({
-            event: "media",
-            streamSid,
-            media: { payload: msg.delta },
-          })
-        );
+        twilioWs.send(JSON.stringify({
+          event: "media",
+          streamSid,
+          media: { payload: msg.delta },
+        }));
       }
     } catch (err) {
       console.error("Error parsing OpenAI message:", err);
@@ -216,16 +286,16 @@ Never sound robotic. Speak like a real receptionist.
           streamSid,
           callSid: msg.start.callSid,
         });
+
+        maybeSendGreeting();
       }
 
       if (msg.event === "media") {
         if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-          openaiWs.send(
-            JSON.stringify({
-              type: "input_audio_buffer.append",
-              audio: msg.media.payload,
-            })
-          );
+          openaiWs.send(JSON.stringify({
+            type: "input_audio_buffer.append",
+            audio: msg.media.payload,
+          }));
         }
       }
 
@@ -245,6 +315,7 @@ Never sound robotic. Speak like a real receptionist.
       code,
       reason: reason?.toString?.(),
     });
+
     if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
       openaiWs.close();
     }
