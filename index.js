@@ -104,12 +104,13 @@ wss.on("connection", (twilioWs, req) => {
   let greetingSent = false;
 
   function maybeSendGreeting() {
-console.log("maybeSendGreeting called", {
-  greetingSent,
-  sessionReady,
-  streamSid,
-  openaiReadyState: openaiWs?.readyState
-});
+  console.log("maybeSendGreeting called", {
+    greetingSent,
+    sessionReady,
+    streamSid,
+    openaiReadyState: openaiWs?.readyState,
+  });
+
   if (
     greetingSent ||
     !sessionReady ||
@@ -117,18 +118,25 @@ console.log("maybeSendGreeting called", {
     !openaiWs ||
     openaiWs.readyState !== WebSocket.OPEN
   ) {
+    console.log("Greeting blocked", {
+      greetingSent,
+      sessionReady,
+      hasStreamSid: !!streamSid,
+      hasOpenAiWs: !!openaiWs,
+      openaiReadyState: openaiWs?.readyState,
+    });
     return;
   }
 
   greetingSent = true;
-
   console.log("Sending AI greeting");
 
   openaiWs.send(JSON.stringify({
     type: "response.create",
     response: {
       modalities: ["audio", "text"],
-      instructions: "Say exactly: Hello, thank you for calling Pizza Express. How can I help you today?"
+      instructions:
+        "Say exactly: Hello, thank you for calling Pizza Express. How can I help you today?"
     }
   }));
 }
@@ -235,13 +243,11 @@ Important:
     }
 
     if (msg.type === "session.updated") {
-      console.log("OpenAI session is ready");
-      sessionReady = true;
-
-      console.log("Calling maybeSendGreeting from session.updated");      
-
-      maybeSendGreeting();
-    }
+  console.log("OpenAI session is ready");
+  sessionReady = true;
+  console.log("Calling maybeSendGreeting from session.updated");
+  maybeSendGreeting();
+}
 
     if (msg.type === "response.output_audio.delta") {
       console.log("OpenAI audio delta received");
