@@ -98,15 +98,15 @@ wss.on("connection", (twilioWs, req) => {
     userAgent: req.headers["user-agent"],
   });
 
-  let streamSid = null;
-  let openaiWs = null;
-  let openaiReady = false;
-  let greetingSent = false;
+let streamSid = null;
+let openaiWs = null;
+let sessionReady = false;
+let greetingSent = false;
 
   function maybeSendGreeting() {
     if (
       greetingSent ||
-      !openaiReady ||
+      !sessionReady ||
       !streamSid ||
       !openaiWs ||
       openaiWs.readyState !== WebSocket.OPEN
@@ -226,8 +226,6 @@ Important:
     console.log("Sending session.update");
     openaiWs.send(JSON.stringify(event));
 
-    openaiReady = true;
-    maybeSendGreeting();
   });
 
   openaiWs.on("message", (data) => {
@@ -243,6 +241,13 @@ Important:
       ) {
         console.log("OpenAI event:", msg.type, msg);
       }
+
+      if (msg.type === "session.updated") {
+       console.log("OpenAI session is ready");
+       sessionReady = true;
+       maybeSendGreeting();
+      }
+
 
       if (
         msg.type === "response.output_audio.delta" &&
