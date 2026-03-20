@@ -138,11 +138,11 @@ console.log("Greeting request marker:", greetingRequestId);
   type: "response.create",
   response: {
     modalities: ["audio"],
-    voice: "marin",
     instructions:
       "Say exactly: Hello, thank you for calling Pizza Express. How can I help you today?"
   }
 }));
+
 }
 
   try {
@@ -245,6 +245,13 @@ openaiWs.on("message", (data) => {
       msg.type === "error"
     ) {
       console.log("OpenAI event type:", msg.type);
+
+
+    }
+
+    if (msg.type === "error") {
+      console.log("=== OPENAI ERROR ===", JSON.stringify(msg, null, 2));
+
     }
 
 
