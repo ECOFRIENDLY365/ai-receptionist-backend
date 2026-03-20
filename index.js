@@ -283,6 +283,45 @@ openaiWs.on("message", (data) => {
      console.log("=== CONTENT PART ADDED ===", JSON.stringify(msg.part, null, 2));
 
     } 
+
+
+if (msg.type === "response.content_part.done") {
+  console.log("=== CONTENT PART DONE ===", JSON.stringify(msg.part, null, 2));
+}
+
+if (
+  msg.type === "response.content_part.done" &&
+  msg.part?.type === "audio" &&
+  msg.part?.audio &&
+  streamSid &&
+  twilioWs.readyState === WebSocket.OPEN
+) {
+  console.log("Forwarding audio from content_part.done");
+
+  twilioWs.send(JSON.stringify({
+    event: "media",
+    streamSid,
+    media: { payload: msg.part.audio },
+  }));
+}
+
+if (
+  msg.type === "response.content_part.done" &&
+  msg.part?.type === "audio" &&
+  msg.part?.audio &&
+  streamSid &&
+  twilioWs.readyState === WebSocket.OPEN
+) {
+  console.log("Forwarding audio from content_part.done");
+
+  twilioWs.send(JSON.stringify({
+    event: "media",
+    streamSid,
+    media: { payload: msg.part.audio },
+  }));
+}
+
+
  
     if (msg.type === "response.output_audio.delta") {
       console.log("OpenAI audio delta received");
