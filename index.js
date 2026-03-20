@@ -112,7 +112,7 @@ wss.on("connection", (twilioWs) => {
         response: {
           modalities: ["audio", "text"],
           instructions:
-            "Greet the caller briefly, naturally, and professionally. Introduce yourself as the receptionist for Pizza Express, ask how you can help, then stop and wait silently for their answer.",
+            "In a British English accent from the first word, greet the caller briefly, naturally, and professionally. Introduce yourself as the receptionist for Pizza Express, ask how you can help, then stop and wait silently for their answer.",
         },
       })
     );
