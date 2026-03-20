@@ -95,41 +95,95 @@ app.post("/incoming-call", (req, res) => {
 wss.on("connection", (twilioWs) => {
   console.log("Twilio connected");
 
-  let streamSid = null;
-  let openaiWs = null;
-  let sessionReady = false;
-  let greetingSent = false;
-  let activeResponseId = null;
-  let assistantSpeaking = false;
+let streamSid = null;
+let openaiWs = null;
+let sessionReady = false;
+let greetingSent = false;
 
+let activeResponseId = null;
+let assistantSpeaking = false;
+
+let currentAssistantItemId = null;
+
+let assistantAudioMsSent = 0;
+let assistantAudioMsPlayed = 0;
+
+let lastInterruptAt = 0;
+const INTERRUPT_DEBOUNCE_MS = 150;
   function interruptAssistant() {
-    if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-      try {
-        openaiWs.send(
-          JSON.stringify({
-            type: "response.cancel",
-          })
-        );
-      } catch (err) {
-        console.error("Failed to cancel OpenAI response:", err);
-      }
-    }
+  const now = Date.now();
+  if (now - lastInterruptAt < INTERRUPT_DEBOUNCE_MS) return;
+  lastInterruptAt = now;
 
-    if (twilioWs && twilioWs.readyState === WebSocket.OPEN && streamSid) {
-      try {
-        twilioWs.send(
-          JSON.stringify({
-            event: "clear",
-            streamSid,
-          })
-        );
-      } catch (err) {
-        console.error("Failed to clear Twilio audio:", err);
-      }
-    }
+  if (!assistantSpeaking) return;
 
-    assistantSpeaking = false;
+  console.log("INTERRUPTING AI", {
+    activeResponseId,
+    currentAssistantItemId,
+    assistantAudioMsPlayed,
+  });
+
+ 
+  if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+    openaiWs.send(
+      JSON.stringify({
+        type: "response.cancel",
+        response_id: activeResponseId || undefined,
+      })
+    );
   }
+
+ 
+  if (twilioWs && twilioWs.readyState === WebSocket.OPEN && streamSid) {
+    twilioWs.send(
+      JSON.stringify({
+        event: "clear",
+        streamSid,
+      })
+    );
+  }
+
+  
+  if (
+    openaiWs &&
+    openaiWs.readyState === WebSocket.OPEN &&
+    currentAssistantItemId &&
+    assistantAudioMsPlayed > 0
+  ) {
+    openaiWs.send(
+      JSON.stringify({
+        type: "conversation.item.truncate",
+        item_id: currentAssistantItemId,
+        content_index: 0,
+        audio_end_ms: assistantAudioMsPlayed,
+      })
+    );
+  }
+
+  assistantSpeaking = false;
+  activeResponseId = null;
+  currentAssistantItemId = null;
+  assistantAudioMsSent = 0;
+  assistantAudioMsPlayed = 0;
+}
+
+function ulawBase64ToMs(base64Audio) {
+  const bytes = Buffer.from(base64Audio, "base64").length;
+  return Math.round(bytes / 8); // g711 = 8 bytes per ms
+}
+
+function sendTwilioMark(ws, streamSid, playedMs) {
+  if (!streamSid) return;
+
+  ws.send(
+    JSON.stringify({
+      event: "mark",
+      streamSid,
+      mark: { name: `ai_ms_${playedMs}` },
+    })
+  );
+}
+
 
   function maybeSendGreeting() {
     if (!sessionReady) return;
@@ -250,38 +304,45 @@ Important:
   console.log("RESPONSE CREATED:", activeResponseId);
 }
 
+     if (
+        msg.type === "response.output_item.added" &&
+        msg.item?.type === "message" &&
+        msg.item?.role === "assistant"
+      ) {
+        currentAssistantItemId = msg.item.id;
+        console.log("ASSISTANT ITEM ID:", currentAssistantItemId);
+
+      }
+
       if (msg.type === "response.done") {
         activeResponseId = null;
         assistantSpeaking = false;
         console.log("RESPONSE DONE");
       }
 
-      if (
-        (msg.type === "response.output_audio.delta" ||
-          msg.type === "response.audio.delta") &&
-        msg.delta
-      ) {
-        assistantSpeaking = true;
+     if (
+  (msg.type === "response.output_audio.delta" ||
+    msg.type === "response.audio.delta") &&
+  msg.delta
+) {
+  assistantSpeaking = true;
 
-        if (streamSid && twilioWs && twilioWs.readyState === WebSocket.OPEN) {
-          twilioWs.send(
-            JSON.stringify({
-              event: "media",
-              streamSid,
-              media: { payload: msg.delta },
-            })
-          );
+  const deltaMs = ulawBase64ToMs(msg.delta);
+  assistantAudioMsSent += deltaMs;
 
-          twilioWs.send(
-            JSON.stringify({
-              event: "mark",
-              streamSid,
-              mark: { name: `audio-${Date.now()}` },
-            })
-          );
-        }
-      }
+  if (streamSid && twilioWs && twilioWs.readyState === WebSocket.OPEN) {
+    twilioWs.send(
+      JSON.stringify({
+        event: "media",
+        streamSid,
+        media: { payload: msg.delta },
+      })
+    );
 
+    sendTwilioMark(twilioWs, streamSid, assistantAudioMsSent);
+  }
+}
+                    
       if (msg.type === "error") {
         console.log("OPENAI ERROR:", JSON.stringify(msg, null, 2));
       }
@@ -318,9 +379,17 @@ Important:
       maybeSendGreeting();
     }
 
-    if (msg.event === "mark") {
-      console.log("Twilio mark received:", msg.mark?.name);
+  if (msg.event === "mark") {
+  const name = msg.mark?.name || "";
+
+  if (name.startsWith("ai_ms_")) {
+    const played = Number(name.replace("ai_ms_", ""));
+    
+    if (!Number.isNaN(played)) {
+      assistantAudioMsPlayed = Math.max(assistantAudioMsPlayed, played);
     }
+  }
+}
 
     if (msg.event === "media") {
       if (openaiWs && openaiWs.readyState === WebSocket.OPEN && msg.media?.payload) {
