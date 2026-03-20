@@ -128,7 +128,7 @@ wss.on("connection", (twilioWs) => {
   openaiWs.on("open", () => {
     console.log("Connected to OpenAI Realtime");
 
-    const sessionUpdate = {
+            const sessionUpdate = {
       type: "session.update",
       session: {
         instructions: `
@@ -142,7 +142,7 @@ Your role:
 
 Style:
 - sound like a real UK receptionist on a phone call
-- natural pacing
+- warm, natural, and concise
 - keep sentences short and clear
 - avoid repetition
 - never sound like a chatbot
@@ -156,17 +156,12 @@ Important:
         input_audio_format: "g711_ulaw",
         output_audio_format: "g711_ulaw",
         voice: "marin",
-
-output: {
-  speed: 1.05,
-},
-
-
-turn_detection: {
+        max_response_output_tokens: 120,
+        turn_detection: {
           type: "server_vad",
-          threshold: 0.55,
-          prefix_padding_ms: 300,
-          silence_duration_ms: 280,
+          threshold: 0.4,
+          prefix_padding_ms: 150,
+          silence_duration_ms: 200,
           create_response: true,
           interrupt_response: true,
         },
@@ -192,6 +187,10 @@ turn_detection: {
       if (msg.type === "response.created") {
         activeResponseId = msg.response?.id || null;
         console.log("RESPONSE CREATED:", activeResponseId);
+      }
+
+      if (msg.type === "input_audio_buffer.speech_started") {
+        console.log("OpenAI detected caller speech");
       }
 
       if (msg.type === "response.done") {
@@ -260,29 +259,18 @@ turn_detection: {
         console.log("Twilio mark received:", msg.mark?.name);
       }
 
-      if (msg.event === "media") {
-  if (msg.media?.payload) {
-    lastUserAudioAt = Date.now();
-
-    
-    if (assistantSpeaking) {
-      const timeSinceLast = Date.now() - lastInterruptAt;
-
-      if (timeSinceLast > 300) {
-        console.log("User speaking → interrupt");
-        interruptAssistant();
+            if (msg.event === "media") {
+        if (msg.media?.payload) {
+          if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+            openaiWs.send(
+              JSON.stringify({
+                type: "input_audio_buffer.append",
+                audio: msg.media.payload,
+              })
+            );
+          }
+        }
       }
-    }
-
-    if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-      openaiWs.send(
-        JSON.stringify({
-          type: "input_audio_buffer.append",
-          audio: msg.media.payload,
-        })
-      );
-    }
-  }
 }} catch (err) {
       console.error("Error parsing Twilio message:", err);
     }
