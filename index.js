@@ -162,7 +162,7 @@ Important:
         max_response_output_tokens: 100,
         turn_detection: {
           type: "semantic_vad",
-          eagerness: "medium",
+          eagerness: "high",
           create_response: true,
           interrupt_response: true,
         },
