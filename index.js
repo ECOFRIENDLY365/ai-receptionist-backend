@@ -156,7 +156,8 @@ Important:
 - after asking a question, pause briefly, then wait for the caller to answer
 - do not leave long awkward pauses before replying once the caller has finished speaking
 - do not add filler such as "no worries" or "take your time" unless the caller explicitly asks for a moment        `.trim(),
-                modalities: ["audio", "text"],
+
+         modalities: ["audio", "text"],
         input_audio_format: "g711_ulaw",
         output_audio_format: "g711_ulaw",
         input_audio_noise_reduction: {
