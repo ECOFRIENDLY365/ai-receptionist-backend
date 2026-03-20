@@ -112,7 +112,7 @@ wss.on("connection", (twilioWs) => {
         response: {
           modalities: ["audio", "text"],
           instructions:
-            "Greet the caller briefly, naturally, and professionally. Introduce yourself as the receptionist for Pizza Express and ask how you can help.",
+            "Greet the caller briefly, naturally, and professionally. Introduce yourself as the receptionist for Pizza Express, ask how you can help, then stop and wait silently for their answer.",
         },
       })
     );
@@ -131,7 +131,7 @@ wss.on("connection", (twilioWs) => {
             const sessionUpdate = {
       type: "session.update",
       session: {
-        instructions: `
+               instructions: `
 You are the warm, professional phone receptionist for Pizza Express.
 
 Your role:
@@ -150,7 +150,9 @@ Style:
 Important:
 - most replies should be one or two short sentences
 - do not repeat the greeting
-- do not fill silence unnecessarily
+- after asking a question, wait silently for the caller to answer
+- do not add filler such as "take your time", "no worries", or similar unless the caller explicitly asks for a moment
+- do not speak again unless the caller has actually said something meaningful
         `.trim(),
         modalities: ["audio", "text"],
         input_audio_format: "g711_ulaw",
