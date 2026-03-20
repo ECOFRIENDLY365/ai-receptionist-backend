@@ -228,10 +228,11 @@ Important:
 
   });
 
-  openaiWs.on("message", (data) => {
+openaiWs.on("message", (data) => {
   try {
     const msg = JSON.parse(data.toString());
 
+   
     if (
       msg.type === "session.created" ||
       msg.type === "session.updated" ||
@@ -239,22 +240,24 @@ Important:
       msg.type === "response.done" ||
       msg.type === "error"
     ) {
-      console.log("OpenAI event:", msg.type, msg);
+      console.log("OpenAI event type:", msg.type);
     }
 
-if (msg.type === "session.updated") {
-  console.log("=== SESSION UPDATED ===");
-  console.log("OpenAI session is ready");
-  sessionReady = true;
-  console.log("Calling maybeSendGreeting from session.updated");
-  maybeSendGreeting();
-}
 
+    if (msg.type === "session.updated") {
+      console.log("=== SESSION UPDATED ===");
+      console.log("OpenAI session is ready");
+      sessionReady = true;
+      console.log("Calling maybeSendGreeting from session.updated");
+      maybeSendGreeting();
+    }
+
+   
     if (msg.type === "response.created") {
       console.log("=== RESPONSE CREATED ===", msg.response?.id);
+    }
 
-}
-
+  
     if (msg.type === "response.output_audio.delta") {
       console.log("OpenAI audio delta received");
 
@@ -271,6 +274,7 @@ if (msg.type === "session.updated") {
         }));
       }
     }
+
   } catch (err) {
     console.error("Error parsing OpenAI message:", err);
   }
