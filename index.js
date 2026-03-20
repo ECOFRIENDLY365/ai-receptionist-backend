@@ -213,8 +213,8 @@ Important:
           threshold: 0.65,
           prefix_padding_ms: 300,
           silence_duration_ms: 900,
-          create_response: false,
-          interrupt_response: false,
+          create_response: true,
+          interrupt_response: true,
         },
       },
     };
