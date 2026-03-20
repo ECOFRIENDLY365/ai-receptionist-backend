@@ -131,18 +131,17 @@ wss.on("connection", (twilioWs, req) => {
   greetingSent = true;
   console.log("=== Sending AI greeting ===");
 
-const greetingRequestId = Date.now();
-console.log("Greeting request marker:", greetingRequestId);
+  const greetingRequestId = Date.now();
+  console.log("Greeting request marker:", greetingRequestId);
 
   openaiWs.send(JSON.stringify({
-  type: "response.create",
-  response: {
-    modalities: ["audio"],
-    instructions:
-      "Say exactly: Hello, thank you for calling Pizza Express. How can I help you today?"
-  }
-}));
-
+    type: "response.create",
+    response: {
+      modalities: ["audio", "text"],
+      instructions:
+        "Say exactly: Hello, thank you for calling Pizza Express. How can I help you today?"
+    }
+  }));
 }
 
   try {
