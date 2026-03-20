@@ -46,6 +46,7 @@ if (!publicBaseUrl) {
   throw new Error("Missing PUBLIC_BASE_URL");
 }
 
+// Keeps your existing setup intact
 createClient(supabaseUrl, supabaseKey);
 
 const server = http.createServer(app);
@@ -53,6 +54,10 @@ const wss = new WebSocketServer({ server, path: "/media-stream" });
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+app.get("/api/test", async (req, res) => {
+  res.json({ success: true, message: "API reachable" });
 });
 
 app.post("/incoming-call", (req, res) => {
@@ -153,7 +158,7 @@ wss.on("connection", (twilioWs, req) => {
   openaiWs.on("open", () => {
     console.log("Connected to OpenAI Realtime");
 
-    const event = {
+    const sessionUpdate = {
       type: "session.update",
       session: {
         instructions: `
@@ -215,7 +220,7 @@ Important:
     };
 
     console.log("Sending session.update");
-    openaiWs.send(JSON.stringify(event));
+    openaiWs.send(JSON.stringify(sessionUpdate));
   });
 
   openaiWs.on("message", (data) => {
@@ -259,11 +264,17 @@ Important:
       }
 
       if (msg.type === "response.content_part.added") {
-        console.log("CONTENT PART ADDED:", JSON.stringify(msg.part, null, 2));
+        console.log("CONTENT PART ADDED type:", msg.part?.type);
+        console.log("CONTENT PART ADDED has audio:", !!msg.part?.audio);
+        console.log("CONTENT PART ADDED keys:", Object.keys(msg.part || {}));
+        console.log("CONTENT PART ADDED transcript:", msg.part?.transcript);
       }
 
       if (msg.type === "response.content_part.done") {
-        console.log("CONTENT PART DONE:", JSON.stringify(msg.part, null, 2));
+        console.log("CONTENT PART DONE type:", msg.part?.type);
+        console.log("CONTENT PART DONE has audio:", !!msg.part?.audio);
+        console.log("CONTENT PART DONE keys:", Object.keys(msg.part || {}));
+        console.log("CONTENT PART DONE transcript:", msg.part?.transcript);
       }
 
       if (
@@ -303,7 +314,10 @@ Important:
       }
 
       if (msg.type === "response.output_audio.delta") {
-        console.log("OpenAI audio delta received");
+        console.log(
+          "OpenAI audio delta received, length:",
+          msg.delta?.length || 0
+        );
 
         if (
           msg.delta &&
@@ -355,7 +369,6 @@ Important:
           streamSid,
           callSid: msg.start.callSid,
         });
-
         maybeSendGreeting();
       }
 
