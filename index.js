@@ -25,6 +25,9 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 const openaiApiKey = process.env.OPENAI_API_KEY;
 const publicBaseUrl = process.env.PUBLIC_BASE_URL;
+const OPENAI_URL = "wss://api.openai.com/v1/realtime?model=gpt-realtime";
+
+
 
 console.log("Startup check:", {
   hasSupabaseUrl: !!supabaseUrl,
@@ -32,6 +35,9 @@ console.log("Startup check:", {
   hasOpenAiKey: !!openaiApiKey,
   hasPublicBaseUrl: !!publicBaseUrl,
   publicBaseUrl,
+
+
+
 });
 
 if (!supabaseUrl || !supabaseKey) {
@@ -149,7 +155,7 @@ wss.on("connection", (twilioWs) => {
 
   openaiWs = new WebSocket(OPENAI_URL, {
     headers: {
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      Authorization: `Bearer ${openaiApiKey}`,
       "OpenAI-Beta": "realtime=v1",
     },
   });
@@ -257,7 +263,7 @@ Important:
       ) {
         assistantSpeaking = true;
 
-        if (streamSid && twilioWs.readyState === WebSocket.OPEN) {
+        if (streamSid && twilioWs && twilioWs.readyState === WebSocket.OPEN) {
           twilioWs.send(
             JSON.stringify({
               event: "media",
@@ -322,7 +328,7 @@ Important:
           interruptAssistant();
         }
 
-        if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+        if (openaiWs && openaiWs.readyState === WebSocket.OPEN && msg.media?.payload) {
           openaiWs.send(
             JSON.stringify({
               type: "input_audio_buffer.append",
