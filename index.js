@@ -46,7 +46,7 @@ if (!publicBaseUrl) {
   throw new Error("Missing PUBLIC_BASE_URL");
 }
 
-// Keeps your existing setup intact
+// Keep your existing setup
 createClient(supabaseUrl, supabaseKey);
 
 const server = http.createServer(app);
@@ -277,55 +277,15 @@ Important:
         console.log("CONTENT PART DONE transcript:", msg.part?.transcript);
       }
 
+      // Handle both possible OpenAI audio delta event names
       if (
-        msg.type === "response.content_part.added" &&
-        msg.part?.type === "audio" &&
-        msg.part?.audio &&
-        streamSid &&
-        twilioWs.readyState === WebSocket.OPEN
+        (msg.type === "response.output_audio.delta" ||
+          msg.type === "response.audio.delta") &&
+        msg.delta
       ) {
-        console.log("Forwarding audio from content_part.added");
+        console.log("Audio delta event:", msg.type, "length:", msg.delta.length);
 
-        twilioWs.send(
-          JSON.stringify({
-            event: "media",
-            streamSid,
-            media: { payload: msg.part.audio },
-          })
-        );
-      }
-
-      if (
-        msg.type === "response.content_part.done" &&
-        msg.part?.type === "audio" &&
-        msg.part?.audio &&
-        streamSid &&
-        twilioWs.readyState === WebSocket.OPEN
-      ) {
-        console.log("Forwarding audio from content_part.done");
-
-        twilioWs.send(
-          JSON.stringify({
-            event: "media",
-            streamSid,
-            media: { payload: msg.part.audio },
-          })
-        );
-      }
-
-      if (msg.type === "response.output_audio.delta") {
-        console.log(
-          "OpenAI audio delta received, length:",
-          msg.delta?.length || 0
-        );
-
-        if (
-          msg.delta &&
-          streamSid &&
-          twilioWs.readyState === WebSocket.OPEN
-        ) {
-          console.log("Forwarding audio from output_audio.delta");
-
+        if (streamSid && twilioWs.readyState === WebSocket.OPEN) {
           twilioWs.send(
             JSON.stringify({
               event: "media",
@@ -333,6 +293,16 @@ Important:
               media: { payload: msg.delta },
             })
           );
+
+          twilioWs.send(
+            JSON.stringify({
+              event: "mark",
+              streamSid,
+              mark: { name: `audio-${Date.now()}` },
+            })
+          );
+
+          console.log("Forwarded audio delta to Twilio");
         }
       }
 
@@ -370,6 +340,10 @@ Important:
           callSid: msg.start.callSid,
         });
         maybeSendGreeting();
+      }
+
+      if (msg.event === "mark") {
+        console.log("Twilio mark received:", msg.mark?.name);
       }
 
       if (msg.event === "media") {
