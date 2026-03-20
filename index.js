@@ -135,13 +135,14 @@ const greetingRequestId = Date.now();
 console.log("Greeting request marker:", greetingRequestId);
 
   openaiWs.send(JSON.stringify({
-    type: "response.create",
-    response: {
-      modalities: ["audio", "text"],
-      instructions:
-        "Say exactly: Hello, thank you for calling Pizza Express. How can I help you today?"
-    }
-  }));
+  type: "response.create",
+  response: {
+    modalities: ["audio"],
+    voice: "marin",
+    instructions:
+      "Say exactly: Hello, thank you for calling Pizza Express. How can I help you today?"
+  }
+}));
 }
 
   try {
@@ -220,7 +221,7 @@ Important:
       threshold: 0.65,
       prefix_padding_ms: 300,
       silence_duration_ms: 900,
-      create_response: true,
+      create_response: false,
       interrupt_response: false
     }
   }
@@ -262,8 +263,21 @@ openaiWs.on("message", (data) => {
 
     if (msg.type === "response.done") {
       console.log("=== RESPONSE DONE ===", msg.response?.id, msg.response?.status);
+      console.log("=== RESPONSE DONE OUTPUT ===", JSON.stringify(msg.response?.output, null, 2));
     }
+
+
+    if (msg.type === "response.output_item.done") {
+     console.log("=== OUTPUT ITEM DONE ===", JSON.stringify(msg.item, null, 2));
     
+    }
+
+
+    if (msg.type === "response.content_part.added") {
+     console.log("=== CONTENT PART ADDED ===", JSON.stringify(msg.part, null, 2));
+
+    } 
+ 
     if (msg.type === "response.output_audio.delta") {
       console.log("OpenAI audio delta received");
 
