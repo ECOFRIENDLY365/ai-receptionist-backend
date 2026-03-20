@@ -46,24 +46,13 @@ if (!publicBaseUrl) {
   throw new Error("Missing PUBLIC_BASE_URL");
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+createClient(supabaseUrl, supabaseKey);
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: "/media-stream" });
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
-app.get("/api/test", async (req, res) => {
-  try {
-    const { data, error } = await supabase.from("Contacts").select("*").limit(1);
-    if (error) throw error;
-    res.json({ success: true, data });
-  } catch (err) {
-    console.error("/api/test error:", err);
-    res.status(500).json({ error: err.message });
-  }
 });
 
 app.post("/incoming-call", (req, res) => {
@@ -104,54 +93,53 @@ wss.on("connection", (twilioWs, req) => {
   let greetingSent = false;
 
   function maybeSendGreeting() {
-  console.log("=== maybeSendGreeting called ===", {
-    greetingSent,
-    sessionReady,
-    streamSid,
-    openaiReadyState: openaiWs?.readyState,
-  });
-
-  if (
-    greetingSent ||
-    !sessionReady ||
-    !streamSid ||
-    !openaiWs ||
-    openaiWs.readyState !== WebSocket.OPEN
-  ) {
-    console.log("=== Greeting blocked ===", {
+    console.log("maybeSendGreeting called", {
       greetingSent,
       sessionReady,
-      hasStreamSid: !!streamSid,
-      hasOpenAiWs: !!openaiWs,
+      streamSid,
       openaiReadyState: openaiWs?.readyState,
     });
-    return;
-  }
 
-  greetingSent = true;
-  console.log("=== Sending AI greeting ===");
-
-  const greetingRequestId = Date.now();
-  console.log("Greeting request marker:", greetingRequestId);
-
-  openaiWs.send(JSON.stringify({
-    type: "response.create",
-    response: {
-      modalities: ["audio", "text"],
-      instructions:
-        "Say exactly: Hello, thank you for calling Pizza Express. How can I help you today?"
+    if (
+      greetingSent ||
+      !sessionReady ||
+      !streamSid ||
+      !openaiWs ||
+      openaiWs.readyState !== WebSocket.OPEN
+    ) {
+      console.log("Greeting blocked", {
+        greetingSent,
+        sessionReady,
+        hasStreamSid: !!streamSid,
+        hasOpenAiWs: !!openaiWs,
+        openaiReadyState: openaiWs?.readyState,
+      });
+      return;
     }
-  }));
-}
+
+    greetingSent = true;
+    console.log("Sending AI greeting");
+
+    openaiWs.send(
+      JSON.stringify({
+        type: "response.create",
+        response: {
+          modalities: ["audio", "text"],
+          instructions:
+            "Say exactly: Hello, thank you for calling Pizza Express. How can I help you today?",
+        },
+      })
+    );
+  }
 
   try {
     openaiWs = new WebSocket(
       "wss://api.openai.com/v1/realtime?model=gpt-realtime",
       {
         headers: {
-  Authorization: `Bearer ${openaiApiKey}`,
-  "OpenAI-Beta": "realtime=v1",
-},
+          Authorization: `Bearer ${openaiApiKey}`,
+          "OpenAI-Beta": "realtime=v1",
+        },
       }
     );
   } catch (err) {
@@ -165,10 +153,10 @@ wss.on("connection", (twilioWs, req) => {
   openaiWs.on("open", () => {
     console.log("Connected to OpenAI Realtime");
 
-const event = {
-  type: "session.update",
-  session: {
-    instructions: `
+    const event = {
+      type: "session.update",
+      session: {
+        instructions: `
 You are the warm, professional phone receptionist for Pizza Express.
 
 Your role:
@@ -210,140 +198,137 @@ Important:
 - do not restart after interruptions
 - do not fill silence unnecessarily
 - most replies should be one or two short sentences
-    `,
-    modalities: ["audio", "text"],
-    input_audio_format: "g711_ulaw",
-    output_audio_format: "g711_ulaw",
-    voice: "marin",
-    turn_detection: {
-      type: "server_vad",
-      threshold: 0.65,
-      prefix_padding_ms: 300,
-      silence_duration_ms: 900,
-      create_response: false,
-      interrupt_response: false
-    }
-  }
-};
+        `,
+        modalities: ["audio", "text"],
+        input_audio_format: "g711_ulaw",
+        output_audio_format: "g711_ulaw",
+        voice: "marin",
+        turn_detection: {
+          type: "server_vad",
+          threshold: 0.65,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 900,
+          create_response: false,
+          interrupt_response: false,
+        },
+      },
+    };
 
     console.log("Sending session.update");
     openaiWs.send(JSON.stringify(event));
-
   });
 
-openaiWs.on("message", (data) => {
-  try {
-    const msg = JSON.parse(data.toString());
-
-   
-    if (
-      msg.type === "session.created" ||
-      msg.type === "session.updated" ||
-      msg.type === "response.created" ||
-      msg.type === "response.done" ||
-      msg.type === "error"
-    ) {
-      console.log("OpenAI event type:", msg.type);
-
-
-    }
-
-    if (msg.type === "error") {
-      console.log("=== OPENAI ERROR ===", JSON.stringify(msg, null, 2));
-
-    }
-
-
-    if (msg.type === "session.updated") {
-      console.log("=== SESSION UPDATED ===");
-      console.log("OpenAI session is ready");
-      sessionReady = true;
-      console.log("Calling maybeSendGreeting from session.updated");
-      maybeSendGreeting();
-    }
-
-   
-    if (msg.type === "response.created") {
-      console.log("=== RESPONSE CREATED ===", msg.response?.id);
-    }
-
-    if (msg.type === "response.done") {
-      console.log("=== RESPONSE DONE ===", msg.response?.id, msg.response?.status);
-      console.log("=== RESPONSE DONE OUTPUT ===", JSON.stringify(msg.response?.output, null, 2));
-    }
-
-
-    if (msg.type === "response.output_item.done") {
-     console.log("=== OUTPUT ITEM DONE ===", JSON.stringify(msg.item, null, 2));
-    
-    }
-
-
-    if (msg.type === "response.content_part.added") {
-     console.log("=== CONTENT PART ADDED ===", JSON.stringify(msg.part, null, 2));
-
-    } 
-
-
-if (msg.type === "response.content_part.done") {
-  console.log("=== CONTENT PART DONE ===", JSON.stringify(msg.part, null, 2));
-}
-
-if (
-  msg.type === "response.content_part.done" &&
-  msg.part?.type === "audio" &&
-  msg.part?.audio &&
-  streamSid &&
-  twilioWs.readyState === WebSocket.OPEN
-) {
-  console.log("Forwarding audio from content_part.done");
-
-  twilioWs.send(JSON.stringify({
-    event: "media",
-    streamSid,
-    media: { payload: msg.part.audio },
-  }));
-}
-
-if (
-  msg.type === "response.content_part.done" &&
-  msg.part?.type === "audio" &&
-  msg.part?.audio &&
-  streamSid &&
-  twilioWs.readyState === WebSocket.OPEN
-) {
-  console.log("Forwarding audio from content_part.done");
-
-  twilioWs.send(JSON.stringify({
-    event: "media",
-    streamSid,
-    media: { payload: msg.part.audio },
-  }));
-}
-
-
- 
-    if (msg.type === "response.output_audio.delta") {
-      console.log("OpenAI audio delta received");
+  openaiWs.on("message", (data) => {
+    try {
+      const msg = JSON.parse(data.toString());
 
       if (
-        msg.delta &&
+        msg.type === "session.created" ||
+        msg.type === "session.updated" ||
+        msg.type === "response.created" ||
+        msg.type === "response.done" ||
+        msg.type === "error"
+      ) {
+        console.log("OpenAI event type:", msg.type);
+      }
+
+      if (msg.type === "error") {
+        console.log("OPENAI ERROR:", JSON.stringify(msg, null, 2));
+      }
+
+      if (msg.type === "session.updated") {
+        console.log("SESSION UPDATED");
+        sessionReady = true;
+        maybeSendGreeting();
+      }
+
+      if (msg.type === "response.created") {
+        console.log("RESPONSE CREATED:", msg.response?.id);
+      }
+
+      if (msg.type === "response.done") {
+        console.log("RESPONSE DONE:", msg.response?.id, msg.response?.status);
+        console.log(
+          "RESPONSE DONE OUTPUT:",
+          JSON.stringify(msg.response?.output, null, 2)
+        );
+      }
+
+      if (msg.type === "response.output_item.done") {
+        console.log("OUTPUT ITEM DONE:", JSON.stringify(msg.item, null, 2));
+      }
+
+      if (msg.type === "response.content_part.added") {
+        console.log("CONTENT PART ADDED:", JSON.stringify(msg.part, null, 2));
+      }
+
+      if (msg.type === "response.content_part.done") {
+        console.log("CONTENT PART DONE:", JSON.stringify(msg.part, null, 2));
+      }
+
+      if (
+        msg.type === "response.content_part.added" &&
+        msg.part?.type === "audio" &&
+        msg.part?.audio &&
         streamSid &&
         twilioWs.readyState === WebSocket.OPEN
       ) {
-        console.log("forwarding audio to Twilio");
-        twilioWs.send(JSON.stringify({
-          event: "media",
-          streamSid,
-          media: { payload: msg.delta },
-        }));
-      }
-    }
+        console.log("Forwarding audio from content_part.added");
 
-  } catch (err) {
-    console.error("Error parsing OpenAI message:", err);
-  }
-});
+        twilioWs.send(
+          JSON.stringify({
+            event: "media",
+            streamSid,
+            media: { payload: msg.part.audio },
+          })
+        );
+      }
+
+      if (
+        msg.type === "response.content_part.done" &&
+        msg.part?.type === "audio" &&
+        msg.part?.audio &&
+        streamSid &&
+        twilioWs.readyState === WebSocket.OPEN
+      ) {
+        console.log("Forwarding audio from content_part.done");
+
+        twilioWs.send(
+          JSON.stringify({
+            event: "media",
+            streamSid,
+            media: { payload: msg.part.audio },
+          })
+        );
+      }
+
+      if (msg.type === "response.output_audio.delta") {
+        console.log("OpenAI audio delta received");
+
+        if (
+          msg.delta &&
+          streamSid &&
+          twilioWs.readyState === WebSocket.OPEN
+        ) {
+          console.log("Forwarding audio from output_audio.delta");
+
+          twilioWs.send(
+            JSON.stringify({
+              event: "media",
+              streamSid,
+              media: { payload: msg.delta },
+            })
+          );
+        }
+      }
+
+      if (msg.type === "response.output_audio.done") {
+        console.log("Audio stream finished");
+      }
+    } catch (err) {
+      console.error("Error parsing OpenAI message:", err);
+    }
+  });
 
   openaiWs.on("close", (code, reason) => {
     console.log("OpenAI WebSocket closed", {
@@ -360,25 +345,28 @@ if (
     try {
       const msg = JSON.parse(message.toString());
 
-      if (msg.event === "connected") {
-        console.log("Twilio connected event");
+      if (msg.event !== "media") {
+        console.log("Twilio event:", msg.event);
       }
 
       if (msg.event === "start") {
-  streamSid = msg.start.streamSid;
-  console.log("=== TWILIO START ===", {
-    streamSid,
-    callSid: msg.start.callSid,
-  });
+        streamSid = msg.start.streamSid;
+        console.log("TWILIO START", {
+          streamSid,
+          callSid: msg.start.callSid,
+        });
 
-  maybeSendGreeting();
-}
+        maybeSendGreeting();
+      }
+
       if (msg.event === "media") {
         if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-          openaiWs.send(JSON.stringify({
-            type: "input_audio_buffer.append",
-            audio: msg.media.payload,
-          }));
+          openaiWs.send(
+            JSON.stringify({
+              type: "input_audio_buffer.append",
+              audio: msg.media.payload,
+            })
+          );
         }
       }
 
