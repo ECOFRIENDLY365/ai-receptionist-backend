@@ -238,7 +238,7 @@ Important:
     console.error("OpenAI WebSocket error:", err);
   });
 
-  twilioWs.on("message", (message) => {
+    twilioWs.on("message", (message) => {
     try {
       const msg = JSON.parse(message.toString());
 
@@ -259,7 +259,7 @@ Important:
         console.log("Twilio mark received:", msg.mark?.name);
       }
 
-            if (msg.event === "media") {
+      if (msg.event === "media") {
         if (msg.media?.payload) {
           if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
             openaiWs.send(
@@ -271,7 +271,7 @@ Important:
           }
         }
       }
-}} catch (err) {
+    } catch (err) {
       console.error("Error parsing Twilio message:", err);
     }
   });
