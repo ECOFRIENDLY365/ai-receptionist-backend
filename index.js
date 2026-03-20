@@ -244,11 +244,10 @@ Important:
         maybeSendGreeting();
       }
 
-      if (msg.type === "response.created") {
-        activeResponseId = msg.response?.id || null;
-        assistantSpeaking = true;
-        console.log("RESPONSE CREATED:", activeResponseId);
-      }
+   if (msg.type === "response.created") {
+  activeResponseId = msg.response?.id || null;
+  console.log("RESPONSE CREATED:", activeResponseId);
+}
 
       if (msg.type === "response.done") {
         activeResponseId = null;
@@ -302,45 +301,40 @@ Important:
   });
 
   twilioWs.on("message", (message) => {
-    try {
-      const msg = JSON.parse(message.toString());
+  try {
+    const msg = JSON.parse(message.toString());
 
-      if (msg.event !== "media") {
-        console.log("Twilio event:", msg.event);
-      }
-
-      if (msg.event === "start") {
-        streamSid = msg.start.streamSid;
-        console.log("TWILIO START", {
-          streamSid,
-          callSid: msg.start.callSid,
-        });
-        maybeSendGreeting();
-      }
-
-      if (msg.event === "mark") {
-        console.log("Twilio mark received:", msg.mark?.name);
-      }
-
-      if (msg.event === "media") {
-        if (assistantSpeaking) {
-          assistantSpeaking = false;
-          interruptAssistant();
-        }
-
-        if (openaiWs && openaiWs.readyState === WebSocket.OPEN && msg.media?.payload) {
-          openaiWs.send(
-            JSON.stringify({
-              type: "input_audio_buffer.append",
-              audio: msg.media.payload,
-            })
-          );
-        }
-      }
-    } catch (err) {
-      console.error("Error parsing Twilio message:", err);
+    if (msg.event !== "media") {
+      console.log("Twilio event:", msg.event);
     }
-  });
+
+    if (msg.event === "start") {
+      streamSid = msg.start.streamSid;
+      console.log("TWILIO START", {
+        streamSid,
+        callSid: msg.start.callSid,
+      });
+      maybeSendGreeting();
+    }
+
+    if (msg.event === "mark") {
+      console.log("Twilio mark received:", msg.mark?.name);
+    }
+
+    if (msg.event === "media") {
+      if (openaiWs && openaiWs.readyState === WebSocket.OPEN && msg.media?.payload) {
+        openaiWs.send(
+          JSON.stringify({
+            type: "input_audio_buffer.append",
+            audio: msg.media.payload,
+          })
+        );
+      }
+    }
+  } catch (err) {
+    console.error("Error parsing Twilio message:", err);
+  }
+});
 
   twilioWs.on("close", (code, reason) => {
     console.log("Twilio WebSocket closed", {
