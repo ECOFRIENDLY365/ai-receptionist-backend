@@ -155,8 +155,14 @@ Important:
         modalities: ["audio", "text"],
         input_audio_format: "g711_ulaw",
         output_audio_format: "g711_ulaw",
-        voice: "alloy",
-        turn_detection: {
+        voice: "marin",
+
+output: {
+  speed: 1.05,
+},
+
+
+turn_detection: {
           type: "server_vad",
           threshold: 0.55,
           prefix_padding_ms: 300,
@@ -255,16 +261,29 @@ Important:
       }
 
       if (msg.event === "media") {
-        if (openaiWs && openaiWs.readyState === WebSocket.OPEN && msg.media?.payload) {
-          openaiWs.send(
-            JSON.stringify({
-              type: "input_audio_buffer.append",
-              audio: msg.media.payload,
-            })
-          );
-        }
+  if (msg.media?.payload) {
+    lastUserAudioAt = Date.now();
+
+    
+    if (assistantSpeaking) {
+      const timeSinceLast = Date.now() - lastInterruptAt;
+
+      if (timeSinceLast > 300) {
+        console.log("User speaking → interrupt");
+        interruptAssistant();
       }
-    } catch (err) {
+    }
+
+    if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+      openaiWs.send(
+        JSON.stringify({
+          type: "input_audio_buffer.append",
+          audio: msg.media.payload,
+        })
+      );
+    }
+  }
+}} catch (err) {
       console.error("Error parsing Twilio message:", err);
     }
   });
