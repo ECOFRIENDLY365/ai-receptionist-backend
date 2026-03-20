@@ -241,9 +241,9 @@ If interrupted, stop immediately.
         max_output_tokens: 80,
         turn_detection: {
           type: "server_vad",
-          threshold: 0.4,
+          threshold: 0.35,
           prefix_padding_ms: 120,
-          silence_duration_ms: 180,
+          silence_duration_ms: 200,
           create_response: true,
           interrupt_response: true,
         },
@@ -257,6 +257,15 @@ If interrupted, stop immediately.
   openaiWs.on("message", (data) => {
     try {
       const msg = JSON.parse(data.toString());
+
+
+if (msg.type === "input_audio_buffer.speech_started") {
+  console.log("OpenAI detected caller speech");
+
+  if (assistantSpeaking) {
+    interruptAssistant();
+  }
+}
 
       if (msg.type === "session.updated") {
         sessionReady = true;
