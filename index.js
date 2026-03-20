@@ -165,12 +165,11 @@ Important:
         },
         voice: "cedar",
         max_response_output_tokens: 100,
-        turn_detection: {
+          turn_detection: {
           type: "semantic_vad",
           eagerness: "high",
           create_response: true,
           interrupt_response: true,
-        },
         },
       },
     };
