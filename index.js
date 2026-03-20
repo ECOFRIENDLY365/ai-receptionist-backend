@@ -357,21 +357,6 @@ If interrupted, stop immediately.
   });
 });
 
-  twilioWs.on("close", (code, reason) => {
-    console.log("Twilio WebSocket closed", {
-      code,
-      reason: reason?.toString?.(),
-    });
-
-    if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-      openaiWs.close();
-    }
-  });
-
-  twilioWs.on("error", (err) => {
-    console.error("Twilio WebSocket error:", err);
-  });
-});
-server.listen(port, () => {
+  server.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
