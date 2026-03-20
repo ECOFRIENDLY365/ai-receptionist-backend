@@ -131,6 +131,9 @@ wss.on("connection", (twilioWs, req) => {
   greetingSent = true;
   console.log("=== Sending AI greeting ===");
 
+const greetingRequestId = Date.now();
+console.log("Greeting request marker:", greetingRequestId);
+
   openaiWs.send(JSON.stringify({
     type: "response.create",
     response: {
@@ -257,7 +260,10 @@ openaiWs.on("message", (data) => {
       console.log("=== RESPONSE CREATED ===", msg.response?.id);
     }
 
-  
+    if (msg.type === "response.done") {
+      console.log("=== RESPONSE DONE ===", msg.response?.id, msg.response?.status);
+    }
+    
     if (msg.type === "response.output_audio.delta") {
       console.log("OpenAI audio delta received");
 
