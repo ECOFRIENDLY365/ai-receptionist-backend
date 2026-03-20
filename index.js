@@ -47,7 +47,6 @@ if (!publicBaseUrl) {
   throw new Error("Missing PUBLIC_BASE_URL");
 }
 
-// Keep your existing setup
 createClient(supabaseUrl, supabaseKey);
 
 const server = http.createServer(app);
@@ -94,94 +93,8 @@ wss.on("connection", (twilioWs) => {
   let openaiWs = null;
   let sessionReady = false;
   let greetingSent = false;
-
   let activeResponseId = null;
   let assistantSpeaking = false;
-  let currentAssistantItemId = null;
-
-  let assistantAudioMsSent = 0;
-  let assistantAudioMsPlayed = 0;
-
-  let lastInterruptAt = 0;
-  const INTERRUPT_DEBOUNCE_MS = 150;
-
-  function ulawBase64ToMs(base64Audio) {
-    const bytes = Buffer.from(base64Audio, "base64").length;
-    return Math.round(bytes / 8); // g711 ulaw @ 8kHz = ~8 bytes per ms
-  }
-
-  function sendTwilioMark(ws, sid, playedMs) {
-    if (!sid || ws.readyState !== WebSocket.OPEN) return;
-
-    ws.send(
-      JSON.stringify({
-        event: "mark",
-        streamSid: sid,
-        mark: { name: `ai_ms_${playedMs}` },
-      })
-    );
-  }
-
-  function interruptAssistant() {
-    const now = Date.now();
-    if (now - lastInterruptAt < INTERRUPT_DEBOUNCE_MS) return;
-    lastInterruptAt = now;
-
-    if (!assistantSpeaking) return;
-
-    console.log("INTERRUPTING AI", {
-      activeResponseId,
-      currentAssistantItemId,
-      assistantAudioMsPlayed,
-      assistantAudioMsSent,
-    });
-
-    // 1) Cancel generation
-    if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-      openaiWs.send(
-        JSON.stringify({
-          type: "response.cancel",
-          response_id: activeResponseId || undefined,
-        })
-      );
-    }
-
-    // 2) Clear Twilio buffered audio
-    if (twilioWs.readyState === WebSocket.OPEN && streamSid) {
-      twilioWs.send(
-        JSON.stringify({
-          event: "clear",
-          streamSid,
-        })
-      );
-    }
-
-    // 3) Truncate assistant audio to what was actually played
-    if (
-      openaiWs &&
-      openaiWs.readyState === WebSocket.OPEN &&
-      currentAssistantItemId &&
-      assistantAudioMsPlayed > 0
-    ) {
-      openaiWs.send(
-        JSON.stringify({
-          type: "conversation.item.truncate",
-          item_id: currentAssistantItemId,
-          content_index: 0,
-          audio_end_ms: assistantAudioMsPlayed,
-        })
-      );
-    }
-
-    assistantSpeaking = false;
-
-    setTimeout(() => {
-      activeResponseId = null;
-      currentAssistantItemId = null;
-      assistantAudioMsSent = 0;
-      assistantAudioMsPlayed = 0;
-    }, 50);
-  }
 
   function maybeSendGreeting() {
     if (!sessionReady) return;
@@ -199,7 +112,7 @@ wss.on("connection", (twilioWs) => {
         response: {
           modalities: ["audio", "text"],
           instructions:
-            "Give one short, natural greeting. Introduce yourself as the receptionist for Pizza Express and ask how you can help in one sentence. Do not repeat or add filler.",
+            "Greet the caller briefly, naturally, and professionally. Introduce yourself as the receptionist for Pizza Express and ask how you can help.",
         },
       })
     );
@@ -219,29 +132,35 @@ wss.on("connection", (twilioWs) => {
       type: "session.update",
       session: {
         instructions: `
-You are a professional female UK receptionist for Pizza Express.
+You are the warm, professional phone receptionist for Pizza Express.
 
-Speak naturally, clearly, and confidently.
-Keep responses short, usually 1 to 2 sentences.
-Do not repeat yourself.
-Do not use filler phrases.
-Do not say things like "no rush" or "take your time" repeatedly.
-If the caller pauses, wait silently.
-If interrupted, stop immediately.
-`.trim(),
+Your role:
+- greet callers naturally
+- find out why they are calling
+- help briefly and efficiently
+- take a clear message when needed
+
+Style:
+- sound like a real UK receptionist on a phone call
+- natural pacing
+- keep sentences short and clear
+- avoid repetition
+- never sound like a chatbot
+
+Important:
+- most replies should be one or two short sentences
+- do not repeat the greeting
+- do not fill silence unnecessarily
+        `.trim(),
         modalities: ["audio", "text"],
         input_audio_format: "g711_ulaw",
         output_audio_format: "g711_ulaw",
-        voice: "cedar",
-        output: {
-          speed: 1.15,
-        },
-        max_output_tokens: 80,
+        voice: "alloy",
         turn_detection: {
           type: "server_vad",
-          threshold: 0.35,
-          prefix_padding_ms: 120,
-          silence_duration_ms: 200,
+          threshold: 0.55,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 280,
           create_response: true,
           interrupt_response: true,
         },
@@ -258,13 +177,6 @@ If interrupted, stop immediately.
 
       console.log("OpenAI event:", msg.type);
 
-      if (msg.type === "input_audio_buffer.speech_started") {
-        console.log("OpenAI detected caller speech");
-        if (assistantSpeaking) {
-          interruptAssistant();
-        }
-      }
-
       if (msg.type === "session.updated") {
         console.log("SESSION UPDATED");
         sessionReady = true;
@@ -276,13 +188,10 @@ If interrupted, stop immediately.
         console.log("RESPONSE CREATED:", activeResponseId);
       }
 
-      if (
-        msg.type === "response.output_item.added" &&
-        msg.item?.type === "message" &&
-        msg.item?.role === "assistant"
-      ) {
-        currentAssistantItemId = msg.item.id;
-        console.log("ASSISTANT ITEM ID:", currentAssistantItemId);
+      if (msg.type === "response.done") {
+        activeResponseId = null;
+        assistantSpeaking = false;
+        console.log("RESPONSE DONE");
       }
 
       if (
@@ -292,10 +201,7 @@ If interrupted, stop immediately.
       ) {
         assistantSpeaking = true;
 
-        const deltaMs = ulawBase64ToMs(msg.delta);
-        assistantAudioMsSent += deltaMs;
-
-        console.log("AUDIO DELTA MS:", deltaMs, "TOTAL:", assistantAudioMsSent);
+        console.log("Forwarding audio delta to Twilio");
 
         if (streamSid && twilioWs.readyState === WebSocket.OPEN) {
           twilioWs.send(
@@ -305,15 +211,7 @@ If interrupted, stop immediately.
               media: { payload: msg.delta },
             })
           );
-
-          sendTwilioMark(twilioWs, streamSid, assistantAudioMsSent);
         }
-      }
-
-      if (msg.type === "response.done") {
-        activeResponseId = null;
-        assistantSpeaking = false;
-        console.log("RESPONSE DONE");
       }
 
       if (msg.type === "error") {
@@ -345,32 +243,25 @@ If interrupted, stop immediately.
 
       if (msg.event === "start") {
         streamSid = msg.start.streamSid;
-        console.log("TWILIO START:", streamSid);
+        console.log("TWILIO START", {
+          streamSid,
+          callSid: msg.start.callSid,
+        });
         maybeSendGreeting();
       }
 
       if (msg.event === "mark") {
-        const name = msg.mark?.name || "";
-        console.log("TWILIO MARK:", name);
-
-        if (name.startsWith("ai_ms_")) {
-          const played = Number(name.replace("ai_ms_", ""));
-          if (!Number.isNaN(played)) {
-            assistantAudioMsPlayed = Math.max(assistantAudioMsPlayed, played);
-          }
-        }
+        console.log("Twilio mark received:", msg.mark?.name);
       }
 
       if (msg.event === "media") {
-        if (msg.media?.payload) {
-          if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-            openaiWs.send(
-              JSON.stringify({
-                type: "input_audio_buffer.append",
-                audio: msg.media.payload,
-              })
-            );
-          }
+        if (openaiWs && openaiWs.readyState === WebSocket.OPEN && msg.media?.payload) {
+          openaiWs.send(
+            JSON.stringify({
+              type: "input_audio_buffer.append",
+              audio: msg.media.payload,
+            })
+          );
         }
       }
     } catch (err) {
