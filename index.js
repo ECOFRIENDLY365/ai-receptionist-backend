@@ -157,11 +157,9 @@ Important:
         output_audio_format: "g711_ulaw",
         voice: "marin",
         max_response_output_tokens: 120,
-        turn_detection: {
-          type: "server_vad",
-          threshold: 0.4,
-          prefix_padding_ms: 150,
-          silence_duration_ms: 200,
+                turn_detection: {
+          type: "semantic_vad",
+          eagerness: "low",
           create_response: true,
           interrupt_response: true,
         },
