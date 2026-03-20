@@ -89,10 +89,12 @@ app.post("/incoming-call", (req, res) => {
 wss.on("connection", (twilioWs) => {
   console.log("Twilio connected");
 
-  let streamSid = null;
+   let streamSid = null;
   let openaiWs = null;
   let sessionReady = false;
   let greetingSent = false;
+  let greetingInProgress = false;
+  let greetingFinished = false;
   let activeResponseId = null;
   let assistantSpeaking = false;
 
@@ -102,7 +104,10 @@ wss.on("connection", (twilioWs) => {
     if (!openaiWs || openaiWs.readyState !== WebSocket.OPEN) return;
     if (greetingSent) return;
 
-    greetingSent = true;
+        greetingSent = true;
+    greetingInProgress = true;
+    greetingFinished = false;
+    assistantSpeaking = true;
 
     console.log("Sending AI greeting");
 
@@ -112,7 +117,7 @@ wss.on("connection", (twilioWs) => {
         response: {
           modalities: ["audio", "text"],
           instructions:
-            "In a British English accent from the first word, greet the caller briefly, naturally, and professionally. Introduce yourself as the receptionist for Pizza Express, then ask: would you like to book a reservation? Then stop and wait silently for their answer.",
+            "Say exactly: Hello, Pizza Express reservations. Would you like to book a reservation?",
         },
       })
     );
