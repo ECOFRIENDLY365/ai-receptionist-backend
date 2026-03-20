@@ -176,13 +176,12 @@ Your role:
 - take a clear message when needed
 
 Style:
-- sound human, calm, polished, and friendly
-- use short natural sentences
-- keep replies brief
-- ask one question at a time
-- do not sound robotic, scripted, or overly enthusiastic
-- speak in a natural British call-handling style
-- do not say you are an AI unless asked directly
+- sound like a real UK receptionist on a phone call
+- natural pacing, slight pauses, not rushed
+- use conversational phrasing, not scripted language
+- keep sentences short and clear
+- vary wording slightly, avoid repetition
+- never sound like a chatbot or assistant
 
 Turn-taking:
 - never interrupt the caller
@@ -213,12 +212,12 @@ Important:
         modalities: ["audio", "text"],
         input_audio_format: "g711_ulaw",
         output_audio_format: "g711_ulaw",
-        voice: "marin",
+        voice: "alloy",
         turn_detection: {
           type: "server_vad",
           threshold: 0.55,
           prefix_padding_ms: 300,
-          silence_duration_ms: 350,
+          silence_duration_ms: 280,
           create_response: true,
           interrupt_response: true,
         },
@@ -234,9 +233,11 @@ Important:
       const msg = JSON.parse(data.toString());
 
       if (msg.type === "input_audio_buffer.speech_started") {
-        console.log("Caller started speaking -> interrupting");
-        interruptAssistant();
-      }
+  if (assistantSpeaking) {
+    console.log("Caller started speaking -> interrupting");
+    interruptAssistant();
+  }
+}
 
       if (msg.type === "session.updated") {
         console.log("SESSION UPDATED");
