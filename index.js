@@ -169,10 +169,10 @@ Important:
         max_response_output_tokens: 100,
         turn_detection: {
           type: "server_vad",
-          threshold: 0.76,
+          threshold: 0.84,
           prefix_padding_ms: 300,
-          silence_duration_ms: 280,
-          create_response: true,
+          silence_duration_ms: 240,
+          create_response: true
           interrupt_response: true,
         },
       },
@@ -199,8 +199,11 @@ Important:
         console.log("RESPONSE CREATED:", activeResponseId);
       }
 
-            if (msg.type === "input_audio_buffer.speech_started") {
-        console.log("OpenAI detected caller speech at", Date.now());
+                  if (msg.type === "input_audio_buffer.speech_started") {
+        console.log("OpenAI detected caller speech at", Date.now(), {
+          assistantSpeaking,
+          activeResponseId,
+        });
       }
 
       if (msg.type === "input_audio_buffer.speech_stopped") {
