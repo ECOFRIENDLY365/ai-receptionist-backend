@@ -161,7 +161,7 @@ Important:
         input_audio_format: "g711_ulaw",
         output_audio_format: "g711_ulaw",
         input_audio_noise_reduction: {
-          type: "near_field",
+          type: "far_field",
         },
                 voice: "cedar",
         max_response_output_tokens: 100,
