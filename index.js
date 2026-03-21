@@ -210,10 +210,12 @@ Important:
         console.log("OpenAI detected caller speech stopped at", Date.now());
       }
 
-      if (msg.type === "response.done") {
+            if (msg.type === "response.done") {
+        console.log("RESPONSE DONE at", Date.now(), {
+          responseId: activeResponseId,
+        });
         activeResponseId = null;
         assistantSpeaking = false;
-        console.log("RESPONSE DONE");
       }
 
       if (
