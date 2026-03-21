@@ -284,7 +284,7 @@ Important:
             openaiWs.send(
               JSON.stringify({
                 type: "input_audio_buffer.append",
-                audio: msg.media.payload,"
+                audio: msg.media.payload,
               })
             );
           }
