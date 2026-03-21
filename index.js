@@ -18,7 +18,7 @@ process.on("unhandledRejection", (reason) => {
 const app = express();
 const port = process.env.PORT || 8080;
 
-app.use(express.json());
+app.use(express.json());"
 app.use(express.urlencoded({ extended: false }));
 
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -172,7 +172,7 @@ Important:
           threshold: 0.84,
           prefix_padding_ms: 300,
           silence_duration_ms: 240,
-          create_response: true
+          create_response: true,
           interrupt_response: true,
         },
       },
