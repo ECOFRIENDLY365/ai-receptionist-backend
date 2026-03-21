@@ -199,10 +199,10 @@ Important:
         console.log("RESPONSE CREATED:", activeResponseId);
       }
 
-                  if (msg.type === "input_audio_buffer.speech_started") {
-        console.log("OpenAI detected caller speech at", Date.now(), {
-          assistantSpeaking,
-          activeResponseId,
+       if (msg.type === "input_audio_buffer.speech_started") {
+         console.log("OpenAI detected caller speech at", Date.now(), {
+         assistantSpeaking,
+         activeResponseId,
         });
       }
 
