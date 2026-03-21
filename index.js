@@ -21,7 +21,7 @@ const port = process.env.PORT || 8080;
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-const supabaseUrl = process.env.SUPABASE_URL:
+const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 const openaiApiKey = process.env.OPENAI_API_KEY;
 const publicBaseUrl = process.env.PUBLIC_BASE_URL;
