@@ -21,7 +21,7 @@ const port = process.env.PORT || 8080;
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-const supabaseUrl = process.env.SUPABASE_URL;"
+const supabaseUrl = process.env.SUPABASE_URL:
 const supabaseKey = process.env.SUPABASE_KEY;
 const openaiApiKey = process.env.OPENAI_API_KEY;
 const publicBaseUrl = process.env.PUBLIC_BASE_URL;
@@ -128,10 +128,10 @@ wss.on("connection", (twilioWs) => {
   openaiWs.on("open", () => {
     console.log("Connected to OpenAI Realtime");
 
-            const sessionUpdate = {
+                const sessionUpdate = {
       type: "session.update",
       session: {
-                       instructions: `
+        instructions: `
 You are the warm, professional phone receptionist for Pizza Express.
 
 Your role:
@@ -157,15 +157,15 @@ Important:
 - do not interrupt the caller if they sound like they are still forming their sentence
 - if the caller says something incomplete such as "I have a question", wait for the rest before replying
 - do not leave long awkward pauses before replying once the caller has clearly finished speaking
-- do not add filler such as "no worries" or "take your time" unless the caller explicitly asks for a moment        `.trim(),
-
-         modalities: ["audio", "text"],
+- do not add filler such as "no worries" or "take your time" unless the caller explicitly asks for a moment
+        `.trim(),
+        modalities: ["audio", "text"],
         input_audio_format: "g711_ulaw",
         output_audio_format: "g711_ulaw",
         input_audio_noise_reduction: {
           type: "far_field",
         },
-                voice: "cedar",
+        voice: "cedar",
         max_response_output_tokens: 100,
         turn_detection: {
           type: "server_vad",
@@ -284,7 +284,7 @@ Important:
             openaiWs.send(
               JSON.stringify({
                 type: "input_audio_buffer.append",
-                audio: msg.media.payload,
+                audio: msg.media.payload,"
               })
             );
           }
