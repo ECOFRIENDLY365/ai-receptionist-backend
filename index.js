@@ -170,9 +170,9 @@ Important:
         max_response_output_tokens: 100,
         turn_detection: {
           type: "server_vad",
-          threshold: 0.84,
+          threshold: 0.9,
           prefix_padding_ms: 300,
-          silence_duration_ms: 220,
+          silence_duration_ms: 260,
           create_response: true,
           interrupt_response: false,
         },
@@ -211,12 +211,20 @@ Important:
         console.log("OpenAI detected caller speech stopped at", Date.now());
       }
 
-            if (msg.type === "response.done") {
-        console.log("RESPONSE DONE at", Date.now(), {
-          responseId: activeResponseId,
-        });
+      if (msg.type === "response.done") {
+        console.log("RESPONSE DONE at", Date.now(), JSON.stringify(msg, null, 2));
         activeResponseId = null;
         assistantSpeaking = false;
+      }
+
+      if (msg.type === "response.output_audio.done") {
+        console.log("RESPONSE OUTPUT AUDIO DONE at", Date.now(), JSON.stringify(msg, null, 2));
+      }
+
+      if (msg.type === "conversation.item.created") {
+        if (msg.item?.role === "user" || msg.item?.role === "assistant") {
+          console.log("CONVERSATION ITEM CREATED at", Date.now(), JSON.stringify(msg, null, 2));
+        }
       }
 
       if (
