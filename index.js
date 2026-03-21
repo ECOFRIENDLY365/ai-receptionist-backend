@@ -154,7 +154,9 @@ Important:
 - do not repeat the greeting
 - do not fill silence unnecessarily
 - after asking a question, pause briefly, then wait for the caller to answer
-- do not leave long awkward pauses before replying once the caller has finished speaking
+- do not interrupt the caller if they sound like they are still forming their sentence
+- if the caller says something incomplete such as "I have a question", wait for the rest before replying
+- do not leave long awkward pauses before replying once the caller has clearly finished speaking
 - do not add filler such as "no worries" or "take your time" unless the caller explicitly asks for a moment        `.trim(),
 
          modalities: ["audio", "text"],
@@ -167,9 +169,9 @@ Important:
         max_response_output_tokens: 100,
         turn_detection: {
           type: "server_vad",
-          threshold: 0.72,
-          prefix_padding_ms: 120,
-          silence_duration_ms: 160,
+          threshold: 0.76,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 280,
           create_response: true,
           interrupt_response: true,
         },
