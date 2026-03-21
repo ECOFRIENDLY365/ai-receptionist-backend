@@ -165,9 +165,11 @@ Important:
         },
         voice: "cedar",
         max_response_output_tokens: 100,
-          turn_detection: {
-          type: "semantic_vad",
-          eagerness: "high",
+          t        turn_detection: {
+          type: "server_vad",
+          threshold: 0.72,
+          prefix_padding_ms: 120,
+          silence_duration_ms: 160,
           create_response: true,
           interrupt_response: true,
         },
