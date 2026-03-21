@@ -163,9 +163,9 @@ Important:
         input_audio_noise_reduction: {
           type: "near_field",
         },
-        voice: "cedar",
+                voice: "cedar",
         max_response_output_tokens: 100,
-          t        turn_detection: {
+        turn_detection: {
           type: "server_vad",
           threshold: 0.72,
           prefix_padding_ms: 120,
