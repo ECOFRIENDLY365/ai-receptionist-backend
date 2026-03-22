@@ -103,6 +103,15 @@ wss.on("connection", (twilioWs) => {
   let watchdogInterval = null;
   let watchdogWarned = false;
 
+  let lastOpenAiEventType = null;
+  let lastTwilioEventType = null;
+  let lastCallerAudioAt = 0;
+  let lastAssistantAudioAt = 0;
+  let lastResponseCreatedAt = 0;
+  let lastResponseDoneAt = 0;
+  let twilioMediaPackets = 0;
+  let openAiAudioPackets = 0;
+
   function clearCallTimers() {
     if (heartbeatInterval) {
       clearInterval(heartbeatInterval);
@@ -190,6 +199,14 @@ wss.on("connection", (twilioWs) => {
           streamSid,
           activeResponseId,
           assistantSpeaking,
+          lastOpenAiEventType,
+          lastTwilioEventType,
+          msSinceCallerAudio: lastCallerAudioAt ? now - lastCallerAudioAt : null,
+          msSinceAssistantAudio: lastAssistantAudioAt ? now - lastAssistantAudioAt : null,
+          msSinceResponseCreated: lastResponseCreatedAt ? now - lastResponseCreatedAt : null,
+          msSinceResponseDone: lastResponseDoneAt ? now - lastResponseDoneAt : null,
+          twilioMediaPackets,
+          openAiAudioPackets,
         });
       }
     }, 10000);
@@ -252,77 +269,69 @@ Important:
   });
 
   openaiWs.on("message", (data) => {
-    try {
-      openaiLastActivityAt = Date.now();
-      watchdogWarned = false;
+  try {
+    openaiLastActivityAt = Date.now();
+    watchdogWarned = false;
 
-      const msg = JSON.parse(data.toString());
+    const msg = JSON.parse(data.toString());
+    lastOpenAiEventType = msg.type || null;
 
-      if (msg.type === "session.updated") {
-        console.log("SESSION UPDATED");
-        sessionReady = true;
-        maybeSendGreeting();
-      }
-
-      if (msg.type === "response.created") {
-        activeResponseId = msg.response?.id || null;
-        console.log("RESPONSE CREATED:", activeResponseId);
-      }
-
-      if (msg.type === "input_audio_buffer.speech_started") {
-      }
-
-      if (msg.type === "input_audio_buffer.speech_stopped") {
-      }
-
-      if (msg.type === "response.output_audio.done") {
-        console.log("OUTPUT AUDIO DONE at", Date.now(), {
-          responseId: activeResponseId,
-        });
-      }
-
-      if (msg.type === "response.done") {
-        console.log("RESPONSE DONE at", Date.now(), {
-          responseId: activeResponseId,
-        });
-
-        activeResponseId = null;
-        assistantSpeaking = false;
-
-        if (greetingInProgress) {
-          greetingInProgress = false;
-          blockInputAudioUntil = Date.now() + 4000;
-          console.log("Greeting finished, holding input for 4 seconds");
-        }
-      }
-
-      if (
-        (msg.type === "response.output_audio.delta" ||
-          msg.type === "response.audio.delta") &&
-        msg.delta
-      ) {
-        assistantSpeaking = true;
-
-        if (streamSid && twilioWs.readyState === WebSocket.OPEN) {
-          twilioWs.send(
-            JSON.stringify({
-              event: "media",
-              streamSid,
-              media: { payload: msg.delta },
-            })
-          );
-        }
-      }
-
-      if (msg.type === "error") {
-        console.error("OPENAI ERROR:", JSON.stringify(msg, null, 2));
-      }
-    } catch (err) {
-      console.error("Error parsing OpenAI message:", err);
+    if (msg.type === "session.updated") {
+      console.log("SESSION UPDATED");
+      sessionReady = true;
+      maybeSendGreeting();
     }
-  });
 
-  openaiWs.on("close", (code, reason) => {
+    if (msg.type === "response.created") {
+      activeResponseId = msg.response?.id || null;
+      lastResponseCreatedAt = Date.now();
+      console.log("RESPONSE CREATED:", activeResponseId);
+    }
+
+    if (msg.type === "response.output_audio.done") {
+      console.log("OUTPUT AUDIO DONE at", Date.now(), {
+        responseId: activeResponseId,
+      });
+    }
+
+    if (msg.type === "response.done") {
+      lastResponseDoneAt = Date.now();
+      console.log("RESPONSE DONE at", Date.now(), {
+        responseId: activeResponseId,
+      });
+      activeResponseId = null;
+      assistantSpeaking = false;
+    }
+
+    if (
+      (msg.type === "response.output_audio.delta" ||
+        msg.type === "response.audio.delta") &&
+      msg.delta
+    ) {
+      assistantSpeaking = true;
+      lastAssistantAudioAt = Date.now();
+      openAiAudioPackets += 1;
+
+      if (streamSid && twilioWs.readyState === WebSocket.OPEN) {
+        twilioWs.send(
+          JSON.stringify({
+            event: "media",
+            streamSid,
+            media: { payload: msg.delta },
+          })
+        );
+      }
+    }
+
+    if (msg.type === "error") {
+      console.error("OPENAI ERROR:", JSON.stringify(msg, null, 2));
+    }
+  } catch (err) {
+    console.error("Error parsing OpenAI message:", err);
+  }
+});
+
+    openaiWs.on("close", (code, reason) => {
     clearCallTimers();
 
     console.log("OpenAI WebSocket closed", {
@@ -334,6 +343,14 @@ Important:
       assistantSpeaking,
       openaiLastActivityAgoMs: Date.now() - openaiLastActivityAt,
       twilioLastActivityAgoMs: Date.now() - twilioLastActivityAt,
+      lastOpenAiEventType,
+      lastTwilioEventType,
+      lastCallerAudioAt,
+      lastAssistantAudioAt,
+      lastResponseCreatedAt,
+      lastResponseDoneAt,
+      twilioMediaPackets,
+      openAiAudioPackets,
     });
   });
 
@@ -350,6 +367,7 @@ Important:
       twilioLastActivityAt = Date.now();
 
       const msg = JSON.parse(message.toString());
+      lastTwilioEventType = msg.event || null;
 
       if (msg.event !== "media" && msg.event !== "mark") {
         console.log("Twilio event:", msg.event);
@@ -369,6 +387,9 @@ Important:
 
       if (msg.event === "media") {
         if (msg.media?.payload) {
+          lastCallerAudioAt = Date.now();
+          twilioMediaPackets += 1;
+
           const inputBlocked =
             assistantSpeaking || Date.now() < blockInputAudioUntil;
 
@@ -389,7 +410,7 @@ Important:
     }
   });
 
-  twilioWs.on("close", (code, reason) => {
+    twilioWs.on("close", (code, reason) => {
     clearCallTimers();
 
     console.log("Twilio WebSocket closed", {
@@ -399,6 +420,14 @@ Important:
       openaiReadyState: openaiWs?.readyState,
       openaiLastActivityAgoMs: Date.now() - openaiLastActivityAt,
       twilioLastActivityAgoMs: Date.now() - twilioLastActivityAt,
+      lastOpenAiEventType,
+      lastTwilioEventType,
+      lastCallerAudioAt,
+      lastAssistantAudioAt,
+      lastResponseCreatedAt,
+      lastResponseDoneAt,
+      twilioMediaPackets,
+      openAiAudioPackets,
     });
 
     if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
