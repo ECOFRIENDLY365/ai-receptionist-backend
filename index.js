@@ -303,6 +303,22 @@ Important:
       assistantSpeaking = false;
     }
 
+    if (msg.type === "input_audio_buffer.speech_started") {
+      const now = Date.now();
+      const msSinceAssistantAudio = lastAssistantAudioAt
+        ? now - lastAssistantAudioAt
+        : null;
+
+      if (msSinceAssistantAudio !== null && msSinceAssistantAudio < 2000) {
+        console.log("DIAG: speech_started soon after assistant audio", {
+          msSinceAssistantAudio,
+          activeResponseId,
+          lastResponseDoneAt,
+          lastCallerAudioAt,
+        });
+      }
+    }
+
     if (
       (msg.type === "response.output_audio.delta" ||
         msg.type === "response.audio.delta") &&
