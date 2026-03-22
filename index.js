@@ -338,7 +338,7 @@ Important:
       });
       activeResponseId = null;
       assistantSpeaking = false;
-      blockInputAudioUntil = Date.now() + 700;
+      blockInputAudioUntil = Date.now() + 200;
     }
 
     if (msg.type === "input_audio_buffer.speech_started") {
