@@ -72,8 +72,12 @@ app.post("/incoming-call", (req, res) => {
     const connect = response.connect();
 
     connect.stream({
-      url: `${publicBaseUrl.replace(/^http/, "ws")}/media-stream`,
-    });
+  url: `${publicBaseUrl.replace(/^http/, "ws")}/media-stream`,
+  parameters: {
+    From: req.body?.From,
+    To: req.body?.To,
+  },
+});
 
     const twiml = response.toString();
     console.log("Returning TwiML:", twiml);
@@ -90,6 +94,10 @@ wss.on("connection", (twilioWs) => {
   console.log("Twilio connected");
 
   let streamSid = null;
+  let callSid = null;
+  let fromNumber = null;
+  let toNumber = null;
+  let callStartedAt = new Date();
   let openaiWs = null;
   let sessionReady = false;
   let greetingSent = false;
@@ -459,6 +467,34 @@ Important:
     });
   });
 
+const callEndedAt = new Date();
+const durationSeconds = Math.floor(
+  (callEndedAt - callStartedAt) / 1000
+);
+
+// UPDATE CALL ROW
+(async () => {
+  try {
+    const { error } = await supabase
+      .from("calls")
+      .update({
+        ended_at: callEndedAt.toISOString(),
+        duration_seconds: durationSeconds,
+        status: "completed",
+      })
+      .eq("call_sid", callSid);
+
+    if (error) {
+      console.error("Supabase update error:", error);
+    } else {
+      console.log("Call updated in Supabase:", callSid);
+    }
+  } catch (err) {
+    console.error("Supabase update failed:", err);
+  }
+})();
+
+
   openaiWs.on("error", (err) => {
     console.error("OpenAI WebSocket error:", err);
   });
@@ -479,13 +515,45 @@ Important:
       }
 
       if (msg.event === "start") {
-        streamSid = msg.start.streamSid;
-        console.log("TWILIO START", {
-          streamSid,
-          callSid: msg.start.callSid,
-        });
-        maybeSendGreeting();
+  streamSid = msg.start.streamSid;
+  callSid = msg.start.callSid;
+  fromNumber = msg.start.customParameters?.From || null;
+  toNumber = msg.start.customParameters?.To || null;
+
+  callStartedAt = new Date();
+
+  console.log("TWILIO START", {
+    streamSid,
+    callSid,
+    fromNumber,
+    toNumber,
+  });
+
+  
+  (async () => {
+    try {
+      const { error } = await supabase.from("calls").insert([
+        {
+          call_sid: callSid,
+          from_number: fromNumber,
+          to_number: toNumber,
+          started_at: callStartedAt.toISOString(),
+          status: "in_progress",
+        },
+      ]);
+
+      if (error) {
+        console.error("Supabase insert error:", error);
+      } else {
+        console.log("Call inserted into Supabase:", callSid);
       }
+    } catch (err) {
+      console.error("Supabase insert failed:", err);
+    }
+  })();
+
+  maybeSendGreeting();
+}
 
       if (msg.event === "mark") {
       }
