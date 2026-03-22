@@ -213,7 +213,9 @@ Important:
 - do not interrupt the caller if they sound like they are still forming their sentence
 - if the caller says something incomplete such as "I have a question", wait for the rest before replying
 - do not leave long awkward pauses before replying once the caller has clearly finished speaking
-- never say phrases like "no rush", "take your time", or "no worries" unless the caller explicitly asks for a moment
+- never say phrases like "no rush", "take your time", "no worries", "of course", or "no problem" unless the caller explicitly asks for reassurance
+- do not add polite filler at the start of replies
+- answer the caller's request directly 
         `.trim(),
         modalities: ["audio", "text"],
         input_audio_format: "g711_ulaw",
@@ -227,7 +229,7 @@ Important:
           type: "server_vad",
           threshold: 0.84,
           prefix_padding_ms: 300,
-          silence_duration_ms: 220,
+          silence_duration_ms: 500,
           create_response: true,
           interrupt_response: false,
         },
