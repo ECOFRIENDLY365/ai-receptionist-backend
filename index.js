@@ -96,6 +96,7 @@ wss.on("connection", (twilioWs) => {
   let activeResponseId = null;
   let assistantSpeaking = false;
   let blockInputAudioUntil = 0;
+  let vadEnabled = false;
   let openaiLastActivityAt = Date.now();
   let twilioLastActivityAt = Date.now();
   let heartbeatInterval = null;
@@ -227,15 +228,7 @@ Important:
           type: "far_field",
         },
         voice: "cedar",
-        max_response_output_tokens: 100,
-        turn_detection: {
-          type: "server_vad",
-          threshold: 0.84,
-          prefix_padding_ms: 300,
-          silence_duration_ms: 500,
-          create_response: true,
-          interrupt_response: false,
-        },
+                max_response_output_tokens: 100,
       },
     };
 
@@ -277,14 +270,35 @@ Important:
         console.log("OpenAI detected caller speech stopped at", Date.now());
       }
 
-            if (msg.type === "response.output_audio.done") {
+      if (msg.type === "response.output_audio.done") {
         console.log("OUTPUT AUDIO DONE at", Date.now(), {
           responseId: activeResponseId,
         });
-        assistantSpeaking = false;
-      }
 
-      if (msg.type === "response.done") {
+        assistantSpeaking = false;
+
+        if (!vadEnabled && greetingSent && openaiWs.readyState === WebSocket.OPEN) {
+          vadEnabled = true;
+
+          console.log("Enabling server VAD after greeting");
+
+          openaiWs.send(
+            JSON.stringify({
+              type: "session.update",
+              session: {
+                turn_detection: {
+                  type: "server_vad",
+                  threshold: 0.84,
+                  prefix_padding_ms: 300,
+                  silence_duration_ms: 500,
+                  create_response: true,
+                  interrupt_response: false,
+                },
+              },
+            })
+          );
+        }
+      }      if (msg.type === "response.done") {
         console.log("RESPONSE DONE at", Date.now(), {
           responseId: activeResponseId,
         });
@@ -363,10 +377,12 @@ Important:
         console.log("Twilio mark received:", msg.mark?.name);
       }
 
-      if (msg.event === "media") {
+            if (msg.event === "media") {
         if (msg.media?.payload) {
           const inputBlocked =
-            assistantSpeaking || Date.now() < blockInputAudioUntil;
+            assistantSpeaking ||
+            Date.now() < blockInputAudioUntil ||
+            !vadEnabled;
 
           if (
             openaiWs &&
