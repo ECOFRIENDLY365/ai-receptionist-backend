@@ -342,8 +342,9 @@ Important:
   twilioWs.on("error", (err) => {
     console.error("Twilio WebSocket error:", err);
  
-});
+   });
 
 server.listen(port, () => {
   console.log(`Server running on port ${port}`);
+
 });
