@@ -89,7 +89,7 @@ app.post("/incoming-call", (req, res) => {
 wss.on("connection", (twilioWs) => {
   console.log("Twilio connected");
 
-    let streamSid = null;
+  let streamSid = null;
   let openaiWs = null;
   let sessionReady = false;
   let greetingSent = false;
@@ -100,6 +100,7 @@ wss.on("connection", (twilioWs) => {
   let twilioLastActivityAt = Date.now();
   let heartbeatInterval = null;
   let watchdogInterval = null;
+  let watchdogWarned = false;
 
   function clearCallTimers() {
     if (heartbeatInterval) {
@@ -143,7 +144,7 @@ wss.on("connection", (twilioWs) => {
     },
   });
 
-    openaiWs.on("open", () => {
+  openaiWs.on("open", () => {
     console.log("Connected to OpenAI Realtime");
 
     openaiLastActivityAt = Date.now();
@@ -172,7 +173,13 @@ wss.on("connection", (twilioWs) => {
       const openaiIdleMs = now - openaiLastActivityAt;
       const twilioIdleMs = now - twilioLastActivityAt;
 
-      if (twilioWs.readyState === WebSocket.OPEN && openaiIdleMs > 25000) {
+      if (
+        twilioWs.readyState === WebSocket.OPEN &&
+        openaiIdleMs > 25000 &&
+        !watchdogWarned
+      ) {
+        watchdogWarned = true;
+
         console.warn("WATCHDOG: OpenAI looks idle/stalled", {
           openaiIdleMs,
           twilioIdleMs,
@@ -218,7 +225,7 @@ Important:
 - do not leave long awkward pauses before replying once the caller has clearly finished speaking
 - never say phrases like "no rush", "take your time", "no worries", "of course", or "no problem" unless the caller explicitly asks for reassurance
 - do not add polite filler at the start of replies
-- answer the caller's request directly 
+- answer the caller's request directly
         `.trim(),
         modalities: ["audio", "text"],
         input_audio_format: "g711_ulaw",
@@ -226,7 +233,7 @@ Important:
         input_audio_noise_reduction: {
           type: "far_field",
         },
-                voice: "cedar",
+        voice: "cedar",
         max_response_output_tokens: 100,
         turn_detection: {
           type: "server_vad",
@@ -243,17 +250,12 @@ Important:
     openaiWs.send(JSON.stringify(sessionUpdate));
   });
 
-    openaiWs.on("message", (data) => {
+  openaiWs.on("message", (data) => {
     try {
       openaiLastActivityAt = Date.now();
+      watchdogWarned = false;
 
       const msg = JSON.parse(data.toString());
-     if (
-        msg.type !== "response.audio.delta" &&
-        msg.type !== "response.output_audio.delta"
-      ) {
-        console.log("OpenAI event:", msg.type);
-      }
 
       if (msg.type === "session.updated") {
         console.log("SESSION UPDATED");
@@ -267,23 +269,18 @@ Important:
       }
 
       if (msg.type === "input_audio_buffer.speech_started") {
-        console.log("OpenAI detected caller speech at", Date.now(), {
-          assistantSpeaking,
-          activeResponseId,
-        });
       }
 
       if (msg.type === "input_audio_buffer.speech_stopped") {
-        console.log("OpenAI detected caller speech stopped at", Date.now());
       }
 
-            if (msg.type === "response.output_audio.done") {
+      if (msg.type === "response.output_audio.done") {
         console.log("OUTPUT AUDIO DONE at", Date.now(), {
           responseId: activeResponseId,
         });
 
         assistantSpeaking = false;
-           }
+      }
 
       if (msg.type === "response.done") {
         console.log("RESPONSE DONE at", Date.now(), {
@@ -292,6 +289,7 @@ Important:
         activeResponseId = null;
         assistantSpeaking = false;
       }
+
       if (
         (msg.type === "response.output_audio.delta" ||
           msg.type === "response.audio.delta") &&
@@ -318,7 +316,7 @@ Important:
     }
   });
 
-    openaiWs.on("close", (code, reason) => {
+  openaiWs.on("close", (code, reason) => {
     clearCallTimers();
 
     console.log("OpenAI WebSocket closed", {
@@ -333,7 +331,7 @@ Important:
     });
   });
 
-    openaiWs.on("error", (err) => {
+  openaiWs.on("error", (err) => {
     console.error("OpenAI WebSocket error:", err);
   });
 
@@ -341,13 +339,13 @@ Important:
     openaiLastActivityAt = Date.now();
   });
 
-    twilioWs.on("message", (message) => {
+  twilioWs.on("message", (message) => {
     try {
       twilioLastActivityAt = Date.now();
 
       const msg = JSON.parse(message.toString());
 
-      if (msg.event !== "media") {
+      if (msg.event !== "media" && msg.event !== "mark") {
         console.log("Twilio event:", msg.event);
       }
 
@@ -361,7 +359,6 @@ Important:
       }
 
       if (msg.event === "mark") {
-        console.log("Twilio mark received:", msg.mark?.name);
       }
 
       if (msg.event === "media") {
@@ -386,7 +383,7 @@ Important:
     }
   });
 
-    twilioWs.on("close", (code, reason) => {
+  twilioWs.on("close", (code, reason) => {
     clearCallTimers();
 
     console.log("Twilio WebSocket closed", {
@@ -403,11 +400,11 @@ Important:
     }
   });
 
-    twilioWs.on("error", (err) => {
+  twilioWs.on("error", (err) => {
     console.error("Twilio WebSocket error:", err);
   });
 
-    twilioWs.on("pong", () => {
+  twilioWs.on("pong", () => {
     twilioLastActivityAt = Date.now();
   });
 });
