@@ -95,6 +95,7 @@ wss.on("connection", (twilioWs) => {
   let greetingSent = false;
   let activeResponseId = null;
   let assistantSpeaking = false;
+  let blockInputAudioUntil = 0;
   let openaiLastActivityAt = Date.now();
   let twilioLastActivityAt = Date.now();
   let heartbeatInterval = null;
@@ -118,6 +119,8 @@ wss.on("connection", (twilioWs) => {
     if (greetingSent) return;
 
     greetingSent = true;
+    assistantSpeaking = true;
+    blockInputAudioUntil = Date.now() + 2500;
 
     console.log("Sending AI greeting");
 
@@ -360,12 +363,15 @@ Important:
         console.log("Twilio mark received:", msg.mark?.name);
       }
 
-            if (msg.event === "media") {
+      if (msg.event === "media") {
         if (msg.media?.payload) {
+          const inputBlocked =
+            assistantSpeaking || Date.now() < blockInputAudioUntil;
+
           if (
             openaiWs &&
             openaiWs.readyState === WebSocket.OPEN &&
-            !assistantSpeaking
+            !inputBlocked
           ) {
             openaiWs.send(
               JSON.stringify({
