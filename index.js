@@ -47,7 +47,7 @@ if (!publicBaseUrl) {
   throw new Error("Missing PUBLIC_BASE_URL");
 }
 
-createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: "/media-stream" });
@@ -93,7 +93,6 @@ wss.on("connection", (twilioWs) => {
   let openaiWs = null;
   let sessionReady = false;
   let greetingSent = false;
-  let greetingAudioLockedUntil = 0;
   let activeResponseId = null;
   let assistantSpeaking = false;
 
@@ -103,12 +102,11 @@ wss.on("connection", (twilioWs) => {
     if (!openaiWs || openaiWs.readyState !== WebSocket.OPEN) return;
     if (greetingSent) return;
 
-       greetingSent = true;
-    greetingAudioLockedUntil = Date.now() + 1500;
+    greetingSent = true;
 
     console.log("Sending AI greeting");
 
-        openaiWs.send(
+    openaiWs.send(
       JSON.stringify({
         type: "response.create",
         response: {
@@ -127,7 +125,7 @@ wss.on("connection", (twilioWs) => {
     },
   });
 
-    openaiWs.on("open", () => {
+  openaiWs.on("open", () => {
     console.log("Connected to OpenAI Realtime");
 
     const sessionUpdate = {
@@ -138,8 +136,9 @@ You are the warm, professional phone receptionist for Pizza Express.
 
 Your role:
 - greet callers naturally
-- find out why they are calling
+- ask how you can help
 - help with reservation enquiries first
+- find out why they are calling
 - help briefly and efficiently
 - take a clear message when needed
 
@@ -152,14 +151,14 @@ Style:
 - never sound like a chatbot
 
 Important:
-- most replies should be one or two short sentences
+- most replies should be one short sentence or two short sentences at most
 - do not repeat the greeting
 - do not fill silence unnecessarily
-- after asking a question, pause briefly, then wait for the caller to answer
+- after asking a question, do not speak again until the caller responds
 - do not interrupt the caller if they sound like they are still forming their sentence
 - if the caller says something incomplete such as "I have a question", wait for the rest before replying
 - do not leave long awkward pauses before replying once the caller has clearly finished speaking
-- do not add filler such as "no worries" or "take your time" unless the caller explicitly asks for a moment
+- never say phrases like "no rush", "take your time", or "no worries" unless the caller explicitly asks for a moment
         `.trim(),
         modalities: ["audio", "text"],
         input_audio_format: "g711_ulaw",
@@ -174,7 +173,7 @@ Important:
           threshold: 0.84,
           prefix_padding_ms: 300,
           silence_duration_ms: 220,
-          create_response: false,
+          create_response: true,
           interrupt_response: false,
         },
       },
@@ -183,7 +182,8 @@ Important:
     console.log("Sending session.update");
     openaiWs.send(JSON.stringify(sessionUpdate));
   });
-       openaiWs.on("message", (data) => {
+
+  openaiWs.on("message", (data) => {
     try {
       const msg = JSON.parse(data.toString());
 
@@ -209,27 +209,6 @@ Important:
 
       if (msg.type === "input_audio_buffer.speech_stopped") {
         console.log("OpenAI detected caller speech stopped at", Date.now());
-
-        if (Date.now() < greetingAudioLockedUntil) {
-          return;
-        }
-
-        if (assistantSpeaking) {
-          return;
-        }
-
-        if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-          console.log("Manually triggering AI response");
-
-          openaiWs.send(
-            JSON.stringify({
-              type: "response.create",
-              response: {
-                modalities: ["audio", "text"],
-              },
-            })
-          );
-        }
       }
 
       if (msg.type === "response.done") {
@@ -246,8 +225,6 @@ Important:
         msg.delta
       ) {
         assistantSpeaking = true;
-
-        console.log("Forwarding audio delta to Twilio");
 
         if (streamSid && twilioWs.readyState === WebSocket.OPEN) {
           twilioWs.send(
@@ -279,7 +256,7 @@ Important:
     console.error("OpenAI WebSocket error:", err);
   });
 
-    twilioWs.on("message", (message) => {
+  twilioWs.on("message", (message) => {
     try {
       const msg = JSON.parse(message.toString());
 
@@ -301,10 +278,6 @@ Important:
       }
 
       if (msg.event === "media") {
-        if (Date.now() < greetingAudioLockedUntil) {
-          return;
-        }
-
         if (msg.media?.payload) {
           if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
             openaiWs.send(
@@ -321,7 +294,7 @@ Important:
     }
   });
 
-    twilioWs.on("close", (code, reason) => {
+  twilioWs.on("close", (code, reason) => {
     console.log("Twilio WebSocket closed", {
       code,
       reason: reason?.toString?.(),
