@@ -97,6 +97,7 @@ wss.on("connection", (twilioWs) => {
   let assistantSpeaking = false;
   let blockInputAudioUntil = 0;
   let vadEnabled = false;
+  let waitingForVadEnable = false;
   let openaiLastActivityAt = Date.now();
   let twilioLastActivityAt = Date.now();
   let heartbeatInterval = null;
@@ -249,7 +250,18 @@ Important:
       }
 
       if (msg.type === "session.updated") {
-        console.log("SESSION UPDATED");
+        console.log("SESSION UPDATED", {
+          waitingForVadEnable,
+          vadEnabled,
+        });
+
+        if (waitingForVadEnable) {
+          waitingForVadEnable = false;
+          vadEnabled = true;
+          console.log("Server VAD is now confirmed enabled");
+          return;
+        }
+
         sessionReady = true;
         maybeSendGreeting();
       }
@@ -277,10 +289,15 @@ Important:
 
         assistantSpeaking = false;
 
-        if (!vadEnabled && greetingSent && openaiWs.readyState === WebSocket.OPEN) {
-          vadEnabled = true;
+      if (
+          !vadEnabled &&
+          !waitingForVadEnable &&
+          greetingSent &&
+          openaiWs.readyState === WebSocket.OPEN
+        ) {
+          waitingForVadEnable = true;
 
-          console.log("Enabling server VAD after greeting");
+          console.log("Requesting server VAD enable after greeting");
 
           openaiWs.send(
             JSON.stringify({
@@ -377,24 +394,22 @@ Important:
         console.log("Twilio mark received:", msg.mark?.name);
       }
 
-            if (msg.event === "media") {
+                  if (msg.event === "media") {
         if (msg.media?.payload) {
           const inputBlocked =
             assistantSpeaking ||
             Date.now() < blockInputAudioUntil ||
             !vadEnabled;
 
-          if (
-            openaiWs &&
-            openaiWs.readyState === WebSocket.OPEN &&
-            !inputBlocked
-          ) {
-            openaiWs.send(
-              JSON.stringify({
-                type: "input_audio_buffer.append",
-                audio: msg.media.payload,
-              })
-            );
+          if (!inputBlocked) {
+            if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+              openaiWs.send(
+                JSON.stringify({
+                  type: "input_audio_buffer.append",
+                  audio: msg.media.payload,
+                })
+              );
+            }
           }
         }
       }
