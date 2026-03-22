@@ -95,6 +95,7 @@ wss.on("connection", (twilioWs) => {
   let greetingSent = false;
   let greetingInProgress = false;
   let activeResponseId = null;
+  let responsePending = false;
   let assistantSpeaking = false;
   let blockInputAudioUntil = 0;
   let openaiLastActivityAt = Date.now();
@@ -283,13 +284,22 @@ Important:
     }
 
     if (msg.type === "response.created") {
+      responsePending = false;
       activeResponseId = msg.response?.id || null;
       lastResponseCreatedAt = Date.now();
       console.log("RESPONSE CREATED:", activeResponseId);
     }
 
     if (msg.type === "input_audio_buffer.speech_stopped") {
-      if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+      const canCreateResponse =
+        openaiWs &&
+        openaiWs.readyState === WebSocket.OPEN &&
+        !activeResponseId &&
+        !responsePending &&
+        !assistantSpeaking;
+
+      if (canCreateResponse) {
+        responsePending = true;
         console.log("Caller speech stopped, creating response");
 
         openaiWs.send(
@@ -300,6 +310,11 @@ Important:
             },
           })
         );
+      } else {
+        console.log("Skipped response.create after speech_stopped", {
+          activeResponseId,
+          assistantSpeaking,
+        });
       }
     }
 
@@ -315,7 +330,8 @@ Important:
       });
     }
 
-        if (msg.type === "response.done") {
+    if (msg.type === "response.done") {
+      responsePending = false;
       lastResponseDoneAt = Date.now();
       console.log("RESPONSE DONE at", Date.now(), {
         responseId: activeResponseId,
