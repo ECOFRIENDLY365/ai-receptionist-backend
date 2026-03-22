@@ -224,6 +224,7 @@ Your role:
 - greet callers naturally
 - ask how you can help
 - help with reservation enquiries first
+- do not claim to complete or confirm a booking unless the system has actually done so
 - find out why they are calling
 - help briefly and efficiently
 - take a clear message when needed
@@ -247,7 +248,8 @@ Important:
 - never say phrases like "no rush", "take your time", "no worries", "of course", or "no problem" unless the caller explicitly asks for reassurance
 - do not add polite filler at the start of replies
 - answer the caller's request directly
-- DO NOT CUT OFF TALKING FOR ANY REASON WHEN RESPONDING
+- never start a sentence you cannot finish cleanly
+- if discussing a reservation, say you can help with the reservation enquiry rather than claiming the booking is already being completed
         `.trim(),
         modalities: ["audio", "text"],
         input_audio_format: "g711_ulaw",
@@ -256,7 +258,7 @@ Important:
           type: "far_field",
         },
         voice: "cedar",
-        max_response_output_tokens: 100,
+        max_response_output_tokens: 220,
         turn_detection: {
           type: "server_vad",
           threshold: 0.84,
