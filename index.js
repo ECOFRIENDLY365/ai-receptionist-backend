@@ -95,6 +95,7 @@ wss.on("connection", (twilioWs) => {
   let greetingSent = false;
   let activeResponseId = null;
   let assistantSpeaking = false;
+  let lastAssistantAudioAt = 0;
   let blockInputAudioUntil = 0;
   let openaiLastActivityAt = Date.now();
   let twilioLastActivityAt = Date.now();
