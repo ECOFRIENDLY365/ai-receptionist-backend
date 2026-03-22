@@ -93,6 +93,7 @@ wss.on("connection", (twilioWs) => {
   let openaiWs = null;
   let sessionReady = false;
   let greetingSent = false;
+  let greetingAudioLockedUntil = 0;
   let activeResponseId = null;
   let assistantSpeaking = false;
 
@@ -102,7 +103,8 @@ wss.on("connection", (twilioWs) => {
     if (!openaiWs || openaiWs.readyState !== WebSocket.OPEN) return;
     if (greetingSent) return;
 
-    greetingSent = true;
+       greetingSent = true;
+    greetingAudioLockedUntil = Date.now() + 1500;
 
     console.log("Sending AI greeting");
 
@@ -116,7 +118,6 @@ wss.on("connection", (twilioWs) => {
         },
       })
     );
-  }
 
   openaiWs = new WebSocket(OPENAI_URL, {
     headers: {
