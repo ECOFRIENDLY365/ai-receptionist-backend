@@ -190,7 +190,7 @@ Important:
     openaiWs.send(JSON.stringify(sessionUpdate));
   });
 
-  openaiWs.on("message", (data) => {
+    openaiWs.on("message", (data) => {
     try {
       const msg = JSON.parse(data.toString());
 
@@ -208,55 +208,43 @@ Important:
       }
 
       if (msg.type === "input_audio_buffer.speech_started") {
-         console.log("OpenAI detected caller speech at", Date.now(), {
-         assistantSpeaking,
-         activeResponseId,
-  });
-
-  console.log("User tried to interrupt while AI speaking:", {
-    assistantSpeaking,
-  });
-}
+        console.log("OpenAI detected caller speech at", Date.now(), {
+          assistantSpeaking,
+          activeResponseId,
+        });
+      }
 
       if (msg.type === "input_audio_buffer.speech_stopped") {
-  console.log("OpenAI detected caller speech stopped at", Date.now());
+        console.log("OpenAI detected caller speech stopped at", Date.now());
 
-  if (Date.now() < greetingAudioLockedUntil) {
-    return;
-  }
+        if (Date.now() < greetingAudioLockedUntil) {
+          return;
+        }
 
-  if (assistantSpeaking) {
-    return;
-  }
+        if (assistantSpeaking) {
+          return;
+        }
 
-  if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-    console.log("Manually triggering AI response");
+        if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+          console.log("Manually triggering AI response");
 
-    openaiWs.send(
-      JSON.stringify({
-        type: "response.create",
-        response: {
-          modalities: ["audio", "text"],
-        },
-      })
-    );
-  }
-}
+          openaiWs.send(
+            JSON.stringify({
+              type: "response.create",
+              response: {
+                modalities: ["audio", "text"],
+              },
+            })
+          );
+        }
+      }
 
       if (msg.type === "response.done") {
-        console.log("RESPONSE DONE at", Date.now(), JSON.stringify(msg, null, 2));
+        console.log("RESPONSE DONE at", Date.now(), {
+          responseId: activeResponseId,
+        });
         activeResponseId = null;
         assistantSpeaking = false;
-      }
-
-      if (msg.type === "response.output_audio.done") {
-        console.log("RESPONSE OUTPUT AUDIO DONE at", Date.now(), JSON.stringify(msg, null, 2));
-      }
-
-      if (msg.type === "conversation.item.created") {
-        if (msg.item?.role === "user" || msg.item?.role === "assistant") {
-          console.log("CONVERSATION ITEM CREATED at", Date.now(), JSON.stringify(msg, null, 2));
-        }
       }
 
       if (
@@ -298,7 +286,7 @@ Important:
     console.error("OpenAI WebSocket error:", err);
   });
 
-    twilioWs.on("message", (message) => {
+  twilioWs.on("message", (message) => {
     try {
       const msg = JSON.parse(message.toString());
 
@@ -319,7 +307,7 @@ Important:
         console.log("Twilio mark received:", msg.mark?.name);
       }
 
-         if (msg.event === "media") {
+      if (msg.event === "media") {
         if (Date.now() < greetingAudioLockedUntil) {
           return;
         }
@@ -353,7 +341,7 @@ Important:
 
   twilioWs.on("error", (err) => {
     console.error("Twilio WebSocket error:", err);
-  
+  });
 });
 
 server.listen(port, () => {
