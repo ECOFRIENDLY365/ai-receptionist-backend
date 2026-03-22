@@ -190,7 +190,7 @@ Important:
     openaiWs.send(JSON.stringify(sessionUpdate));
   });
 
-    openaiWs.on("message", (data) => {
+     openaiWs.on("message", (data) => {
     try {
       const msg = JSON.parse(data.toString());
 
@@ -341,10 +341,9 @@ Important:
 
   twilioWs.on("error", (err) => {
     console.error("Twilio WebSocket error:", err);
- 
-   });
+  });
+});
 
 server.listen(port, () => {
   console.log(`Server running on port ${port}`);
-
 });
