@@ -96,8 +96,6 @@ wss.on("connection", (twilioWs) => {
   let activeResponseId = null;
   let assistantSpeaking = false;
   let blockInputAudioUntil = 0;
-  let vadEnabled = false;
-  let waitingForVadEnable = false;
   let openaiLastActivityAt = Date.now();
   let twilioLastActivityAt = Date.now();
   let heartbeatInterval = null;
@@ -122,7 +120,7 @@ wss.on("connection", (twilioWs) => {
 
     greetingSent = true;
     assistantSpeaking = true;
-    blockInputAudioUntil = Date.now() + 2500;
+    blockInputAudioUntil = Date.now() + 4000;
 
     console.log("Sending AI greeting");
 
@@ -228,8 +226,16 @@ Important:
         input_audio_noise_reduction: {
           type: "far_field",
         },
-        voice: "cedar",
-                max_response_output_tokens: 100,
+                voice: "cedar",
+        max_response_output_tokens: 100,
+        turn_detection: {
+          type: "server_vad",
+          threshold: 0.84,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 500,
+          create_response: true,
+          interrupt_response: false,
+        },
       },
     };
 
@@ -250,18 +256,7 @@ Important:
       }
 
       if (msg.type === "session.updated") {
-        console.log("SESSION UPDATED", {
-          waitingForVadEnable,
-          vadEnabled,
-        });
-
-        if (waitingForVadEnable) {
-          waitingForVadEnable = false;
-          vadEnabled = true;
-          console.log("Server VAD is now confirmed enabled");
-          return;
-        }
-
+        console.log("SESSION UPDATED");
         sessionReady = true;
         maybeSendGreeting();
       }
@@ -282,39 +277,13 @@ Important:
         console.log("OpenAI detected caller speech stopped at", Date.now());
       }
 
-      if (msg.type === "response.output_audio.done") {
+            if (msg.type === "response.output_audio.done") {
         console.log("OUTPUT AUDIO DONE at", Date.now(), {
           responseId: activeResponseId,
         });
 
         assistantSpeaking = false;
-
-      if (
-          !vadEnabled &&
-          !waitingForVadEnable &&
-          greetingSent &&
-          openaiWs.readyState === WebSocket.OPEN
-        ) {
-          waitingForVadEnable = true;
-
-          console.log("Requesting server VAD enable after greeting");
-
-          openaiWs.send(
-            JSON.stringify({
-              type: "session.update",
-              session: {
-                turn_detection: {
-                  type: "server_vad",
-                  threshold: 0.84,
-                  prefix_padding_ms: 300,
-                  silence_duration_ms: 500,
-                  create_response: true,
-                  interrupt_response: false,
-                },
-              },
-            })
-          );
-        }
+      }
       }      if (msg.type === "response.done") {
         console.log("RESPONSE DONE at", Date.now(), {
           responseId: activeResponseId,
