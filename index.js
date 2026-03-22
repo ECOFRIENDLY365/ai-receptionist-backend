@@ -283,8 +283,9 @@ Important:
         });
 
         assistantSpeaking = false;
-      }
-      }      if (msg.type === "response.done") {
+           }
+
+      if (msg.type === "response.done") {
         console.log("RESPONSE DONE at", Date.now(), {
           responseId: activeResponseId,
         });
