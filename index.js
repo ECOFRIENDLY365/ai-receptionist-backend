@@ -94,6 +94,7 @@ wss.on("connection", (twilioWs) => {
   let sessionReady = false;
   let greetingSent = false;
   let greetingInProgress = false;
+  let firstCallerTurnStarted = false;
   let activeResponseId = null;
   let responsePending = false;
   let assistantSpeaking = false;
@@ -133,6 +134,7 @@ wss.on("connection", (twilioWs) => {
     if (greetingSent) return;
 
     greetingSent = true;
+    greetingInProgress = true;
     assistantSpeaking = true;
     blockInputAudioUntil = Date.now() + 1500;
 
@@ -304,14 +306,13 @@ Important:
         openaiWs.readyState === WebSocket.OPEN &&
         !activeResponseId &&
         !responsePending &&
-        !assistantSpeaking;
+        !assistantSpeaking &&
+        firstCallerTurnStarted;
 
       if (canCreateResponse) {
         responsePending = true;
 
         console.log("Caller speech stopped, creating response");
-
-        const manualResponseId = `manual-${Date.now()}`;
 
         openaiWs.send(
           JSON.stringify({
@@ -320,7 +321,7 @@ Important:
               modalities: ["audio", "text"],
               metadata: {
                 trigger: "speech_stopped",
-                manualResponseId,
+                manualResponseId: `manual-${Date.now()}`
               },
             },
           })
@@ -330,6 +331,7 @@ Important:
           activeResponseId,
           responsePending,
           assistantSpeaking,
+          firstCallerTurnStarted,
           blockRemainingMs: Math.max(0, blockInputAudioUntil - Date.now()),
         });
       }
@@ -353,6 +355,11 @@ Important:
       console.log("RESPONSE DONE at", Date.now(), {
         responseId: activeResponseId,
       });
+
+      if (greetingInProgress) {
+        greetingInProgress = false;
+      }
+
       activeResponseId = null;
       loggedAudioStartForResponseId = null;
       assistantSpeaking = false;
@@ -364,6 +371,11 @@ Important:
       const msSinceAssistantAudio = lastAssistantAudioAt
         ? now - lastAssistantAudioAt
         : null;
+
+      if (!firstCallerTurnStarted && !greetingInProgress) {
+        firstCallerTurnStarted = true;
+        console.log("First caller turn detected");
+      }
 
       if (msSinceAssistantAudio !== null && msSinceAssistantAudio < 2000) {
         console.log("DIAG: speech_started soon after assistant audio", {
