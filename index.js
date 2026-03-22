@@ -254,7 +254,8 @@ Important:
 - answer the caller's request directly
 - never start a sentence you cannot finish cleanly
 - if discussing a reservation, say you can help with the reservation enquiry rather than claiming the booking is already being completed
-- once you have repeated their booking reservation at the end, ask if there are any queries you can help with, if not ensure their booking is confirmed on their date. Finish with "see you then!" in a polite voice.
+- once you have repeated their booking reservation at the end, politely ask "will that be all?". If caller has no queries ensure their booking is confirmed on their date. 
+- Finish with "see you then!" in a polite voice.
         `.trim(),
         modalities: ["audio", "text"],
         input_audio_format: "g711_ulaw",
