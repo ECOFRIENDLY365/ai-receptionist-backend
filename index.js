@@ -96,6 +96,8 @@ wss.on("connection", (twilioWs) => {
   let greetingInProgress = false;
   let activeResponseId = null;
   let responsePending = false;
+  let callerSpeaking = false;
+  let respondedToCurrentTurn = false;
   let assistantSpeaking = false;
   let blockInputAudioUntil = 0;
   let openaiLastActivityAt = Date.now();
@@ -110,6 +112,8 @@ wss.on("connection", (twilioWs) => {
   let lastAssistantAudioAt = 0;
   let lastResponseCreatedAt = 0;
   let lastResponseDoneAt = 0;
+  let lastAssistantAudioStartedAt = 0;
+  let loggedAudioStartForResponseId = null;
   let twilioMediaPackets = 0;
   let openAiAudioPackets = 0;
 
@@ -287,19 +291,25 @@ Important:
       responsePending = false;
       activeResponseId = msg.response?.id || null;
       lastResponseCreatedAt = Date.now();
+      loggedAudioStartForResponseId = null;
       console.log("RESPONSE CREATED:", activeResponseId);
     }
 
     if (msg.type === "input_audio_buffer.speech_stopped") {
+      callerSpeaking = false;
+
       const canCreateResponse =
         openaiWs &&
         openaiWs.readyState === WebSocket.OPEN &&
         !activeResponseId &&
         !responsePending &&
-        !assistantSpeaking;
+        !assistantSpeaking &&
+        !respondedToCurrentTurn;
 
       if (canCreateResponse) {
         responsePending = true;
+        respondedToCurrentTurn = true;
+
         console.log("Caller speech stopped, creating response");
 
         openaiWs.send(
@@ -313,7 +323,10 @@ Important:
       } else {
         console.log("Skipped response.create after speech_stopped", {
           activeResponseId,
+          responsePending,
           assistantSpeaking,
+          respondedToCurrentTurn,
+          blockRemainingMs: Math.max(0, blockInputAudioUntil - Date.now()),
         });
       }
     }
@@ -337,6 +350,7 @@ Important:
         responseId: activeResponseId,
       });
       activeResponseId = null;
+      loggedAudioStartForResponseId = null;
       assistantSpeaking = false;
       blockInputAudioUntil = Date.now() + 200;
     }
@@ -362,9 +376,26 @@ Important:
         msg.type === "response.audio.delta") &&
       msg.delta
     ) {
+      const now = Date.now();
+
       assistantSpeaking = true;
-      lastAssistantAudioAt = Date.now();
+      lastAssistantAudioAt = now;
       openAiAudioPackets += 1;
+
+      if (
+        activeResponseId &&
+        loggedAudioStartForResponseId !== activeResponseId
+      ) {
+        loggedAudioStartForResponseId = activeResponseId;
+        lastAssistantAudioStartedAt = now;
+
+        console.log("ASSISTANT AUDIO STARTED", {
+          responseId: activeResponseId,
+          msFromResponseCreated: lastResponseCreatedAt
+            ? now - lastResponseCreatedAt
+            : null,
+        });
+      }
 
       if (streamSid && twilioWs.readyState === WebSocket.OPEN) {
         twilioWs.send(
