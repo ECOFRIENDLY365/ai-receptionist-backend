@@ -203,12 +203,16 @@ Important:
         console.log("RESPONSE CREATED:", activeResponseId);
       }
 
-       if (msg.type === "input_audio_buffer.speech_started") {
+      if (msg.type === "input_audio_buffer.speech_started") {
          console.log("OpenAI detected caller speech at", Date.now(), {
          assistantSpeaking,
          activeResponseId,
-        });
-      }
+  });
+
+  console.log("User tried to interrupt while AI speaking:", {
+    assistantSpeaking,
+  });
+}
 
       if (msg.type === "input_audio_buffer.speech_stopped") {
         console.log("OpenAI detected caller speech stopped at", Date.now());
