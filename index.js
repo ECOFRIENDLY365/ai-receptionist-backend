@@ -364,12 +364,10 @@ Important:
         console.log("Twilio mark received:", msg.mark?.name);
       }
 
-                  if (msg.event === "media") {
+      if (msg.event === "media") {
         if (msg.media?.payload) {
           const inputBlocked =
-            assistantSpeaking ||
-            Date.now() < blockInputAudioUntil ||
-            !vadEnabled;
+            assistantSpeaking || Date.now() < blockInputAudioUntil;
 
           if (!inputBlocked) {
             if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
