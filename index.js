@@ -306,7 +306,7 @@ Important:
         openaiWs &&
         openaiWs.readyState === WebSocket.OPEN &&
         !activeResponseId &&
-        !responsePending &&*
+        !responsePending &&
         !assistantSpeaking &&
         firstCallerTurnStarted;
 
