@@ -263,7 +263,7 @@ Important:
           type: "server_vad",
           threshold: 0.84,
           prefix_padding_ms: 300,
-          silence_duration_ms: 900,
+          silence_duration_ms: 650,
           create_response: false,
           interrupt_response: false,
         },
@@ -356,7 +356,7 @@ Important:
       activeResponseId = null;
       loggedAudioStartForResponseId = null;
       assistantSpeaking = false;
-      blockInputAudioUntil = Date.now() + 200;
+      blockInputAudioUntil = Date.now() + 100;
     }
 
     if (msg.type === "input_audio_buffer.speech_started") {
