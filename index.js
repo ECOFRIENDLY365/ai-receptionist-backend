@@ -179,7 +179,7 @@ Important:
           threshold: 0.9,
           prefix_padding_ms: 300,
           silence_duration_ms: 260,
-          create_response: true,
+          create_response: false,
           interrupt_response: false,
         },
       },
@@ -218,8 +218,21 @@ Important:
 }
 
       if (msg.type === "input_audio_buffer.speech_stopped") {
-        console.log("OpenAI detected caller speech stopped at", Date.now());
-      }
+  console.log("OpenAI detected caller speech stopped at", Date.now());
+
+  if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+    console.log("Manually triggering AI response");
+
+    openaiWs.send(
+      JSON.stringify({
+        type: "response.create",
+        response: {
+          modalities: ["audio", "text"],
+        },
+      })
+    );
+  }
+}
 
       if (msg.type === "response.done") {
         console.log("RESPONSE DONE at", Date.now(), JSON.stringify(msg, null, 2));
