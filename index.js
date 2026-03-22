@@ -274,6 +274,13 @@ Important:
         console.log("OpenAI detected caller speech stopped at", Date.now());
       }
 
+            if (msg.type === "response.output_audio.done") {
+        console.log("OUTPUT AUDIO DONE at", Date.now(), {
+          responseId: activeResponseId,
+        });
+        assistantSpeaking = false;
+      }
+
       if (msg.type === "response.done") {
         console.log("RESPONSE DONE at", Date.now(), {
           responseId: activeResponseId,
@@ -281,7 +288,6 @@ Important:
         activeResponseId = null;
         assistantSpeaking = false;
       }
-
       if (
         (msg.type === "response.output_audio.delta" ||
           msg.type === "response.audio.delta") &&
@@ -354,9 +360,13 @@ Important:
         console.log("Twilio mark received:", msg.mark?.name);
       }
 
-      if (msg.event === "media") {
+            if (msg.event === "media") {
         if (msg.media?.payload) {
-          if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+          if (
+            openaiWs &&
+            openaiWs.readyState === WebSocket.OPEN &&
+            !assistantSpeaking
+          ) {
             openaiWs.send(
               JSON.stringify({
                 type: "input_audio_buffer.append",
