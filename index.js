@@ -247,6 +247,7 @@ Important:
 - never say phrases like "no rush", "take your time", "no worries", "of course", or "no problem" unless the caller explicitly asks for reassurance
 - do not add polite filler at the start of replies
 - answer the caller's request directly
+- DO NOT CUT OFF TALKING FOR ANY REASON WHEN RESPONDING
         `.trim(),
         modalities: ["audio", "text"],
         input_audio_format: "g711_ulaw",
@@ -290,7 +291,9 @@ Important:
       activeResponseId = msg.response?.id || null;
       lastResponseCreatedAt = Date.now();
       loggedAudioStartForResponseId = null;
-      console.log("RESPONSE CREATED:", activeResponseId);
+      console.log("RESPONSE CREATED:", activeResponseId, {
+      metadata: msg.response?.metadata || null,
+      });
     }
 
     if (msg.type === "input_audio_buffer.speech_stopped") {
@@ -306,11 +309,17 @@ Important:
 
         console.log("Caller speech stopped, creating response");
 
+        const manualResponseId = `manual-${Date.now()}`;
+
         openaiWs.send(
           JSON.stringify({
             type: "response.create",
             response: {
               modalities: ["audio", "text"],
+              metadata: {
+                trigger: "speech_stopped",
+                manualResponseId,
+              },
             },
           })
         );
