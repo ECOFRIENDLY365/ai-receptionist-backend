@@ -89,12 +89,27 @@ app.post("/incoming-call", (req, res) => {
 wss.on("connection", (twilioWs) => {
   console.log("Twilio connected");
 
-  let streamSid = null;
+    let streamSid = null;
   let openaiWs = null;
   let sessionReady = false;
   let greetingSent = false;
   let activeResponseId = null;
   let assistantSpeaking = false;
+  let openaiLastActivityAt = Date.now();
+  let twilioLastActivityAt = Date.now();
+  let heartbeatInterval = null;
+  let watchdogInterval = null;
+
+  function clearCallTimers() {
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
+    if (watchdogInterval) {
+      clearInterval(watchdogInterval);
+      watchdogInterval = null;
+    }
+  }
 
   function maybeSendGreeting() {
     if (!sessionReady) return;
@@ -125,8 +140,48 @@ wss.on("connection", (twilioWs) => {
     },
   });
 
-  openaiWs.on("open", () => {
+    openaiWs.on("open", () => {
     console.log("Connected to OpenAI Realtime");
+
+    openaiLastActivityAt = Date.now();
+    twilioLastActivityAt = Date.now();
+
+    heartbeatInterval = setInterval(() => {
+      try {
+        if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+          openaiWs.ping();
+        }
+      } catch (err) {
+        console.error("OpenAI ping failed:", err);
+      }
+
+      try {
+        if (twilioWs && twilioWs.readyState === WebSocket.OPEN) {
+          twilioWs.ping();
+        }
+      } catch (err) {
+        console.error("Twilio ping failed:", err);
+      }
+    }, 15000);
+
+    watchdogInterval = setInterval(() => {
+      const now = Date.now();
+      const openaiIdleMs = now - openaiLastActivityAt;
+      const twilioIdleMs = now - twilioLastActivityAt;
+
+      if (twilioWs.readyState === WebSocket.OPEN && openaiIdleMs > 25000) {
+        console.warn("WATCHDOG: OpenAI looks idle/stalled", {
+          openaiIdleMs,
+          twilioIdleMs,
+          openaiReadyState: openaiWs?.readyState,
+          twilioReadyState: twilioWs?.readyState,
+          sessionReady,
+          streamSid,
+          activeResponseId,
+          assistantSpeaking,
+        });
+      }
+    }, 10000);
 
     const sessionUpdate = {
       type: "session.update",
@@ -183,11 +238,17 @@ Important:
     openaiWs.send(JSON.stringify(sessionUpdate));
   });
 
-  openaiWs.on("message", (data) => {
+    openaiWs.on("message", (data) => {
     try {
-      const msg = JSON.parse(data.toString());
+      openaiLastActivityAt = Date.now();
 
-      console.log("OpenAI event:", msg.type);
+      const msg = JSON.parse(data.toString());
+     if (
+        msg.type !== "response.audio.delta" &&
+        msg.type !== "response.output_audio.delta"
+      ) {
+        console.log("OpenAI event:", msg.type);
+      }
 
       if (msg.type === "session.updated") {
         console.log("SESSION UPDATED");
@@ -245,19 +306,33 @@ Important:
     }
   });
 
-  openaiWs.on("close", (code, reason) => {
+    openaiWs.on("close", (code, reason) => {
+    clearCallTimers();
+
     console.log("OpenAI WebSocket closed", {
       code,
       reason: reason?.toString?.(),
+      streamSid,
+      sessionReady,
+      activeResponseId,
+      assistantSpeaking,
+      openaiLastActivityAgoMs: Date.now() - openaiLastActivityAt,
+      twilioLastActivityAgoMs: Date.now() - twilioLastActivityAt,
     });
   });
 
-  openaiWs.on("error", (err) => {
+    openaiWs.on("error", (err) => {
     console.error("OpenAI WebSocket error:", err);
   });
 
-  twilioWs.on("message", (message) => {
+  openaiWs.on("pong", () => {
+    openaiLastActivityAt = Date.now();
+  });
+
+    twilioWs.on("message", (message) => {
     try {
+      twilioLastActivityAt = Date.now();
+
       const msg = JSON.parse(message.toString());
 
       if (msg.event !== "media") {
@@ -294,10 +369,16 @@ Important:
     }
   });
 
-  twilioWs.on("close", (code, reason) => {
+    twilioWs.on("close", (code, reason) => {
+    clearCallTimers();
+
     console.log("Twilio WebSocket closed", {
       code,
       reason: reason?.toString?.(),
+      streamSid,
+      openaiReadyState: openaiWs?.readyState,
+      openaiLastActivityAgoMs: Date.now() - openaiLastActivityAt,
+      twilioLastActivityAgoMs: Date.now() - twilioLastActivityAt,
     });
 
     if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
@@ -305,10 +386,13 @@ Important:
     }
   });
 
-  twilioWs.on("error", (err) => {
+    twilioWs.on("error", (err) => {
     console.error("Twilio WebSocket error:", err);
   });
-});
+
+  twilioWs.on("pong", () => {
+    twilioLastActivityAt = Date.now();
+  });
 
 server.listen(port, () => {
   console.log(`Server running on port ${port}`);
