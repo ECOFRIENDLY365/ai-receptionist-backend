@@ -93,9 +93,9 @@ wss.on("connection", (twilioWs) => {
   let openaiWs = null;
   let sessionReady = false;
   let greetingSent = false;
+  let greetingInProgress = false;
   let activeResponseId = null;
   let assistantSpeaking = false;
-  let lastAssistantAudioAt = 0;
   let blockInputAudioUntil = 0;
   let openaiLastActivityAt = Date.now();
   let twilioLastActivityAt = Date.now();
@@ -122,7 +122,7 @@ wss.on("connection", (twilioWs) => {
 
     greetingSent = true;
     assistantSpeaking = true;
-    blockInputAudioUntil = Date.now() + 4000;
+    blockInputAudioUntil = Date.now() + 1500;
 
     console.log("Sending AI greeting");
 
@@ -279,16 +279,21 @@ Important:
         console.log("OUTPUT AUDIO DONE at", Date.now(), {
           responseId: activeResponseId,
         });
-
-        assistantSpeaking = false;
       }
 
       if (msg.type === "response.done") {
         console.log("RESPONSE DONE at", Date.now(), {
           responseId: activeResponseId,
         });
+
         activeResponseId = null;
         assistantSpeaking = false;
+
+        if (greetingInProgress) {
+          greetingInProgress = false;
+          blockInputAudioUntil = Date.now() + 4000;
+          console.log("Greeting finished, holding input for 4 seconds");
+        }
       }
 
       if (
