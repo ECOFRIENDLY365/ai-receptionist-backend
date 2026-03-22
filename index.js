@@ -390,9 +390,10 @@ Important:
     console.error("Twilio WebSocket error:", err);
   });
 
-  twilioWs.on("pong", () => {
+    twilioWs.on("pong", () => {
     twilioLastActivityAt = Date.now();
   });
+});
 
 server.listen(port, () => {
   console.log(`Server running on port ${port}`);
