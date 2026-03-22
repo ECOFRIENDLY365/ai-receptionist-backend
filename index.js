@@ -96,8 +96,6 @@ wss.on("connection", (twilioWs) => {
   let greetingInProgress = false;
   let activeResponseId = null;
   let responsePending = false;
-  let callerSpeaking = false;
-  let respondedToCurrentTurn = false;
   let assistantSpeaking = false;
   let blockInputAudioUntil = 0;
   let openaiLastActivityAt = Date.now();
@@ -296,19 +294,15 @@ Important:
     }
 
     if (msg.type === "input_audio_buffer.speech_stopped") {
-      callerSpeaking = false;
-
       const canCreateResponse =
         openaiWs &&
         openaiWs.readyState === WebSocket.OPEN &&
         !activeResponseId &&
         !responsePending &&
-        !assistantSpeaking &&
-        !respondedToCurrentTurn;
+        !assistantSpeaking;
 
       if (canCreateResponse) {
         responsePending = true;
-        respondedToCurrentTurn = true;
 
         console.log("Caller speech stopped, creating response");
 
@@ -325,7 +319,6 @@ Important:
           activeResponseId,
           responsePending,
           assistantSpeaking,
-          respondedToCurrentTurn,
           blockRemainingMs: Math.max(0, blockInputAudioUntil - Date.now()),
         });
       }
