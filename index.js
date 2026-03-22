@@ -252,6 +252,7 @@ Important:
 - answer the caller's request directly
 - never start a sentence you cannot finish cleanly
 - if discussing a reservation, say you can help with the reservation enquiry rather than claiming the booking is already being completed
+- once you have repeated their booking reservation at the end, say "see you then!"
         `.trim(),
         modalities: ["audio", "text"],
         input_audio_format: "g711_ulaw",
@@ -305,7 +306,7 @@ Important:
         openaiWs &&
         openaiWs.readyState === WebSocket.OPEN &&
         !activeResponseId &&
-        !responsePending &&
+        !responsePending &&*
         !assistantSpeaking &&
         firstCallerTurnStarted;
 
