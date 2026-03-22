@@ -468,19 +468,14 @@ Important:
           lastCallerAudioAt = Date.now();
           twilioMediaPackets += 1;
 
-          const inputBlocked =
-            assistantSpeaking || Date.now() < blockInputAudioUntil;
-
-          if (!inputBlocked) {
-            if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-              openaiWs.send(
-                JSON.stringify({
-                  type: "input_audio_buffer.append",
-                  audio: msg.media.payload,
-                })
-              );
-            }
-          }
+      if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+        openaiWs.send(
+         JSON.stringify({
+           type: "input_audio_buffer.append",
+           audio: msg.media.payload,
+    })
+  );
+}
         }
       }
     } catch (err) {
