@@ -108,7 +108,7 @@ wss.on("connection", (twilioWs) => {
 
     console.log("Sending AI greeting");
 
-    openaiWs.send(
+        openaiWs.send(
       JSON.stringify({
         type: "response.create",
         response: {
@@ -118,6 +118,7 @@ wss.on("connection", (twilioWs) => {
         },
       })
     );
+  }
 
   openaiWs = new WebSocket(OPENAI_URL, {
     headers: {
@@ -126,10 +127,10 @@ wss.on("connection", (twilioWs) => {
     },
   });
 
-  openaiWs.on("open", () => {
+    openaiWs.on("open", () => {
     console.log("Connected to OpenAI Realtime");
 
-                const sessionUpdate = {
+    const sessionUpdate = {
       type: "session.update",
       session: {
         instructions: `
@@ -137,9 +138,8 @@ You are the warm, professional phone receptionist for Pizza Express.
 
 Your role:
 - greet callers naturally
-- ask how you can help after the opening line
-- help with reservation enquiries first
 - find out why they are calling
+- help with reservation enquiries first
 - help briefly and efficiently
 - take a clear message when needed
 
@@ -150,22 +150,16 @@ Style:
 - keep sentences short and clear
 - avoid repetition
 - never sound like a chatbot
-- vary tone slightly so responses feel human, not identical each time
 
 Important:
-- most replies should be one short sentence
-- when asking a question, ask it in one sentence and then stop speaking
-- use natural phrasing, contractions, and light variation (e.g. "sure", "of course", "okay")
-- avoid sounding scripted or overly formal- do not repeat the greeting
+- most replies should be one or two short sentences
+- do not repeat the greeting
 - do not fill silence unnecessarily
-- after asking a question, pause naturally and allow the caller to respond
-- if the caller hesitates briefly, do not jump in immediately
+- after asking a question, pause briefly, then wait for the caller to answer
 - do not interrupt the caller if they sound like they are still forming their sentence
 - if the caller says something incomplete such as "I have a question", wait for the rest before replying
 - do not leave long awkward pauses before replying once the caller has clearly finished speaking
-- never say phrases like "no rush", "take your time", "no worries", or similar reassurance fillers
-- do not add follow-up comments after asking a question
-- after asking a question, do not speak again until the caller responds
+- do not add filler such as "no worries" or "take your time" unless the caller explicitly asks for a moment
         `.trim(),
         modalities: ["audio", "text"],
         input_audio_format: "g711_ulaw",
@@ -177,9 +171,9 @@ Important:
         max_response_output_tokens: 100,
         turn_detection: {
           type: "server_vad",
-          threshold: 0.9,
+          threshold: 0.84,
           prefix_padding_ms: 300,
-          silence_duration_ms: 260,
+          silence_duration_ms: 220,
           create_response: false,
           interrupt_response: false,
         },
@@ -189,7 +183,6 @@ Important:
     console.log("Sending session.update");
     openaiWs.send(JSON.stringify(sessionUpdate));
   });
-
        openaiWs.on("message", (data) => {
     try {
       const msg = JSON.parse(data.toString());
@@ -286,7 +279,7 @@ Important:
     console.error("OpenAI WebSocket error:", err);
   });
 
-  twilioWs.on("message", (message) => {
+    twilioWs.on("message", (message) => {
     try {
       const msg = JSON.parse(message.toString());
 
@@ -328,7 +321,7 @@ Important:
     }
   });
 
-  twilioWs.on("close", (code, reason) => {
+    twilioWs.on("close", (code, reason) => {
     console.log("Twilio WebSocket closed", {
       code,
       reason: reason?.toString?.(),
