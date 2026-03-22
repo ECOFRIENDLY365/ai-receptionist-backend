@@ -221,6 +221,14 @@ Important:
       if (msg.type === "input_audio_buffer.speech_stopped") {
   console.log("OpenAI detected caller speech stopped at", Date.now());
 
+  if (Date.now() < greetingAudioLockedUntil) {
+    return;
+  }
+
+  if (assistantSpeaking) {
+    return;
+  }
+
   if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
     console.log("Manually triggering AI response");
 
@@ -311,7 +319,11 @@ Important:
         console.log("Twilio mark received:", msg.mark?.name);
       }
 
-      if (msg.event === "media") {
+         if (msg.event === "media") {
+        if (Date.now() < greetingAudioLockedUntil) {
+          return;
+        }
+
         if (msg.media?.payload) {
           if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
             openaiWs.send(
