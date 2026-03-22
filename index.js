@@ -257,8 +257,8 @@ Important:
           type: "server_vad",
           threshold: 0.84,
           prefix_padding_ms: 300,
-          silence_duration_ms: 500,
-          create_response: true,
+          silence_duration_ms: 900,
+          create_response: false,
           interrupt_response: false,
         },
       },
@@ -288,19 +288,41 @@ Important:
       console.log("RESPONSE CREATED:", activeResponseId);
     }
 
+    if (msg.type === "input_audio_buffer.speech_stopped") {
+      if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+        console.log("Caller speech stopped, creating response");
+
+        openaiWs.send(
+          JSON.stringify({
+            type: "response.create",
+            response: {
+              modalities: ["audio", "text"],
+            },
+          })
+        );
+      }
+    }
+
     if (msg.type === "response.output_audio.done") {
       console.log("OUTPUT AUDIO DONE at", Date.now(), {
         responseId: activeResponseId,
       });
     }
 
-    if (msg.type === "response.done") {
+    if (msg.type === "response.output_audio.done") {
+      console.log("OUTPUT AUDIO DONE at", Date.now(), {
+        responseId: activeResponseId,
+      });
+    }
+
+        if (msg.type === "response.done") {
       lastResponseDoneAt = Date.now();
       console.log("RESPONSE DONE at", Date.now(), {
         responseId: activeResponseId,
       });
       activeResponseId = null;
       assistantSpeaking = false;
+      blockInputAudioUntil = Date.now() + 700;
     }
 
     if (msg.type === "input_audio_buffer.speech_started") {
