@@ -551,48 +551,55 @@ Important:
     }
   });
 
-    const callEndedAt = new Date();
-const durationSeconds = Math.floor(
-  (callEndedAt - callStartedAt) / 1000
-);
+twilioWs.on("close", (code, reason) => {
+  clearCallTimers();
 
+  const callEndedAt = new Date();
+  const durationSeconds = callStartedAt
+    ? Math.max(0, Math.floor((callEndedAt - callStartedAt) / 1000))
+    : null;
 
-(async () => {
-  try {
-    const { error } = await supabase
-      .from("calls")
-      .update({
-        ended_at: callEndedAt.toISOString(),
-        duration_seconds: durationSeconds,
-        status: "completed",
-      })
-      .eq("call_sid", callSid);
+  (async () => {
+    try {
+      if (callSid) {
+        const { error } = await supabase
+          .from("calls")
+          .update({
+            ended_at: callEndedAt.toISOString(),
+            duration_seconds: durationSeconds,
+            status: "completed",
+          })
+          .eq("call_sid", callSid);
 
-    if (error) {
-      console.error("Supabase update error:", error);
-    } else {
-      console.log("Call updated in Supabase:", callSid);
+        if (error) {
+          console.error("Supabase update error:", error);
+        } else {
+          console.log("Call updated in Supabase:", callSid);
+        }
+      }
+    } catch (err) {
+      console.error("Supabase update failed:", err);
     }
-  } catch (err) {
-    console.error("Supabase update failed:", err);
-  }
-})();
+  })();
 
-      code,
-      reason: reason?.toString?.(),
-      streamSid,
-      openaiReadyState: openaiWs?.readyState,
-      openaiLastActivityAgoMs: Date.now() - openaiLastActivityAt,
-      twilioLastActivityAgoMs: Date.now() - twilioLastActivityAt,
-      lastOpenAiEventType,
-      lastTwilioEventType,
-      lastCallerAudioAt,
-      lastAssistantAudioAt,
-      lastResponseCreatedAt,
-      lastResponseDoneAt,
-      twilioMediaPackets,
-      openAiAudioPackets,
-    });
+ console.log("Twilio WebSocket closed", {
+  code,
+  reason: reason ? reason.toString() : null,
+  streamSid,
+  callSid,
+  openaiReadyState: openaiWs?.readyState,
+  openaiLastActivityAgoMs: Date.now() - openaiLastActivityAt,
+  twilioLastActivityAgoMs: Date.now() - twilioLastActivityAt,
+  lastOpenAiEventType,
+  lastTwilioEventType,
+  lastCallerAudioAt,
+  lastAssistantAudioAt,
+  lastResponseCreatedAt,
+  lastResponseDoneAt,
+  twilioMediaPackets,
+  openAiAudioPackets,
+  durationSeconds,
+});
 
     if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
       openaiWs.close();
