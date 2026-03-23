@@ -467,33 +467,6 @@ Important:
     });
   });
 
-const callEndedAt = new Date();
-const durationSeconds = Math.floor(
-  (callEndedAt - callStartedAt) / 1000
-);
-
-// UPDATE CALL ROW
-(async () => {
-  try {
-    const { error } = await supabase
-      .from("calls")
-      .update({
-        ended_at: callEndedAt.toISOString(),
-        duration_seconds: durationSeconds,
-        status: "completed",
-      })
-      .eq("call_sid", callSid);
-
-    if (error) {
-      console.error("Supabase update error:", error);
-    } else {
-      console.log("Call updated in Supabase:", callSid);
-    }
-  } catch (err) {
-    console.error("Supabase update failed:", err);
-  }
-})();
-
 
   openaiWs.on("error", (err) => {
     console.error("OpenAI WebSocket error:", err);
@@ -578,10 +551,33 @@ const durationSeconds = Math.floor(
     }
   });
 
-    twilioWs.on("close", (code, reason) => {
-    clearCallTimers();
+    const callEndedAt = new Date();
+const durationSeconds = Math.floor(
+  (callEndedAt - callStartedAt) / 1000
+);
 
-    console.log("Twilio WebSocket closed", {
+
+(async () => {
+  try {
+    const { error } = await supabase
+      .from("calls")
+      .update({
+        ended_at: callEndedAt.toISOString(),
+        duration_seconds: durationSeconds,
+        status: "completed",
+      })
+      .eq("call_sid", callSid);
+
+    if (error) {
+      console.error("Supabase update error:", error);
+    } else {
+      console.log("Call updated in Supabase:", callSid);
+    }
+  } catch (err) {
+    console.error("Supabase update failed:", err);
+  }
+})();
+
       code,
       reason: reason?.toString?.(),
       streamSid,
