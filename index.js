@@ -739,7 +739,7 @@ if (error) {
   console.error("Supabase insert error:", error);
 } else {
   console.log("Call inserted into Supabase:", callSid);
-}  )();
+}  
 
   maybeSendGreeting();
 }
