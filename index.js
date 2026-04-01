@@ -26,6 +26,7 @@ const supabaseKey = process.env.SUPABASE_KEY;
 const openaiApiKey = process.env.OPENAI_API_KEY;
 const publicBaseUrl = process.env.PUBLIC_BASE_URL;
 const OPENAI_URL = "wss://api.openai.com/v1/realtime?model=gpt-realtime";
+const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 
 console.log("Startup check:", {
   hasSupabaseUrl: !!supabaseUrl,
@@ -144,6 +145,195 @@ function buildTranscriptText() {
   return transcriptEntries
     .map(e => `${e.role}: ${e.text}`)
     .join("\n");
+}
+
+async function runPostCallExtraction({
+  callSid,
+  transcriptText,
+  fromNumber,
+  toNumber,
+  durationSeconds,
+}) {
+  if (!callSid) return;
+  if (!transcriptText || !transcriptText.trim()) {
+    await supabase
+      .from("calls")
+      .update({
+        extraction_status: "skipped",
+        extraction_error: "No transcript text available",
+      })
+      .eq("call_sid", callSid);
+
+    return;
+  }
+
+  try {
+    await supabase
+      .from("calls")
+      .update({
+        extraction_status: "processing",
+        extraction_error: null,
+      })
+      .eq("call_sid", callSid);
+
+    const schema = {
+      name: "call_extraction",
+      strict: true,
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          summary: {
+            type: "string",
+          },
+          intent: {
+            type: "string",
+            enum: [
+              "booking",
+              "booking_change",
+              "booking_cancel",
+              "opening_hours",
+              "menu_question",
+              "location_question",
+              "complaint",
+              "message",
+              "other"
+            ],
+          },
+          structured_data: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              customer_name: {
+                type: ["string", "null"],
+              },
+              booking_time: {
+                type: ["string", "null"],
+              },
+              booking_date: {
+                type: ["string", "null"],
+              },
+              party_size: {
+                type: ["number", "null"],
+              },
+              phone_number: {
+                type: ["string", "null"],
+              },
+              request_type: {
+                type: ["string", "null"],
+              },
+              callback_requested: {
+                type: ["boolean", "null"],
+              },
+            },
+            required: [
+              "customer_name",
+              "booking_time",
+              "booking_date",
+              "party_size",
+              "phone_number",
+              "request_type",
+              "callback_requested"
+            ],
+          },
+        },
+        required: ["summary", "intent", "structured_data"],
+      },
+    };
+
+    const response = await fetch(OPENAI_RESPONSES_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${openaiApiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4.1-mini",
+        input: [
+          {
+            role: "system",
+            content: [
+              {
+                type: "input_text",
+                text:
+                  "You extract structured information from restaurant receptionist phone calls. " +
+                  "Be conservative. If a detail is not clearly stated, return null. " +
+                  "Do not guess names, dates, times, or phone numbers."
+              }
+            ]
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text:
+                  `Call metadata:
+call_sid: ${callSid}
+from_number: ${fromNumber ?? ""}
+to_number: ${toNumber ?? ""}
+duration_seconds: ${durationSeconds ?? ""}
+
+Transcript:
+${transcriptText}`
+              }
+            ]
+          }
+        ],
+        text: {
+          format: {
+            type: "json_schema",
+            ...schema
+          }
+        }
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenAI extraction failed: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    const rawText =
+      data.output_text ||
+      data.output?.[0]?.content?.[0]?.text ||
+      null;
+
+    if (!rawText) {
+      throw new Error("No structured output text returned");
+    }
+
+    const parsed = JSON.parse(rawText);
+
+    const { error } = await supabase
+      .from("calls")
+      .update({
+        summary: parsed.summary,
+        intent: parsed.intent,
+        structured_data: parsed.structured_data,
+        extraction_status: "completed",
+        extraction_error: null,
+      })
+      .eq("call_sid", callSid);
+
+    if (error) {
+      throw error;
+    }
+
+    console.log("Post-call extraction saved:", callSid);
+  } catch (err) {
+    console.error("Post-call extraction failed:", err);
+
+    await supabase
+      .from("calls")
+      .update({
+        extraction_status: "failed",
+        extraction_error: err.message,
+      })
+      .eq("call_sid", callSid);
+  }
 }
 
   function clearCallTimers() {
@@ -384,12 +574,6 @@ Important:
       });
     }
 
-    if (msg.type === "response.output_audio.done") {
-      console.log("OUTPUT AUDIO DONE at", Date.now(), {
-        responseId: activeResponseId,
-      });
-    }
-
     if (msg.type === "response.done") {
       responsePending = false;
       lastResponseDoneAt = Date.now();
@@ -539,24 +723,23 @@ if (msg.type === "input_audio_buffer.speech_started") {
   (async () => {
     try {
       const { error } = await supabase.from("calls").insert([
-        {
-          call_sid: callSid,
-          from_number: fromNumber,
-          to_number: toNumber,
-          started_at: callStartedAt.toISOString(),
-          status: "in_progress",
-        },
+       
+ {
+  call_sid: callSid,
+  from_number: fromNumber,
+  to_number: toNumber,
+  started_at: callStartedAt.toISOString(),
+  status: "in_progress",
+  extraction_status: "pending",
+
+}
       ]);
 
-      if (error) {
-        console.error("Supabase insert error:", error);
-      } else {
-        console.log("Call inserted into Supabase:", callSid);
-      }
-    } catch (err) {
-      console.error("Supabase insert failed:", err);
-    }
-  })();
+if (error) {
+  console.error("Supabase insert error:", error);
+} else {
+  console.log("Call inserted into Supabase:", callSid);
+}  })();
 
   maybeSendGreeting();
 }
@@ -597,21 +780,31 @@ twilioWs.on("close", (code, reason) => {
       if (callSid && !transcriptFinalized) {
         transcriptFinalized = true;
 
-        const { error } = await supabase
-          .from("calls")
-          .update({
-            ended_at: callEndedAt.toISOString(),
-            duration_seconds: durationSeconds,
-            status: "completed",
-            transcript_text: buildTranscriptText(),
-          })
-          .eq("call_sid", callSid);
+        const transcriptText = buildTranscriptText();
 
-        if (error) {
-          console.error("Supabase update error:", error);
-        } else {
-          console.log("Call updated in Supabase:", callSid);
-        }
+const { error } = await supabase
+  .from("calls")
+  .update({
+    ended_at: callEndedAt.toISOString(),
+    duration_seconds: durationSeconds,
+    status: "completed",
+    transcript_text: transcriptText,
+  })
+  .eq("call_sid", callSid);
+
+if (error) {
+  console.error("Supabase update error:", error);
+} else {
+  console.log("Call updated in Supabase:", callSid);
+
+  runPostCallExtraction({
+    callSid,
+    transcriptText,
+    fromNumber,
+    toNumber,
+    durationSeconds,
+  });
+}
       }
     } catch (err) {
       console.error("Supabase update failed:", err);
