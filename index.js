@@ -719,33 +719,31 @@ if (msg.type === "input_audio_buffer.speech_started") {
     toNumber,
   });
 
-  
   (async () => {
     try {
       const { error } = await supabase.from("calls").insert([
-       
- {
-  call_sid: callSid,
-  from_number: fromNumber,
-  to_number: toNumber,
-  started_at: callStartedAt.toISOString(),
-  status: "in_progress",
-  extraction_status: "pending",
-
-}
+        {
+          call_sid: callSid,
+          from_number: fromNumber,
+          to_number: toNumber,
+          started_at: callStartedAt.toISOString(),
+          status: "in_progress",
+          extraction_status: "pending",
+        },
       ]);
 
-if (error) {
-  console.error("Supabase insert error:", error);
-} else {
-  console.log("Call inserted into Supabase:", callSid);
-}  
+      if (error) {
+        console.error("Supabase insert error:", error);
+      } else {
+        console.log("Call inserted into Supabase:", callSid);
+      }
+    } catch (err) {
+      console.error("Supabase insert failed:", err);
+    }
+  })();
 
   maybeSendGreeting();
 }
-
-      if (msg.event === "mark") {
-      }
 
       if (msg.event === "media") {
         if (msg.media?.payload) {
