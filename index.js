@@ -408,27 +408,29 @@ Important:
     }
 
     if (msg.type === "conversation.item.input_audio_transcription.completed") {
-      addTranscript("caller", msg.transcript);
-    }
-      const now = Date.now();
-      const msSinceAssistantAudio = lastAssistantAudioAt
-        ? now - lastAssistantAudioAt
-        : null;
+  addTranscript("caller", msg.transcript);
+}
 
-      if (!firstCallerTurnStarted && !greetingInProgress) {
-        firstCallerTurnStarted = true;
-        console.log("First caller turn detected");
-      }
+if (msg.type === "input_audio_buffer.speech_started") {
+  const now = Date.now();
+  const msSinceAssistantAudio = lastAssistantAudioAt
+    ? now - lastAssistantAudioAt
+    : null;
 
-      if (msSinceAssistantAudio !== null && msSinceAssistantAudio < 2000) {
-        console.log("DIAG: speech_started soon after assistant audio", {
-          msSinceAssistantAudio,
-          activeResponseId,
-          lastResponseDoneAt,
-          lastCallerAudioAt,
-        });
-      }
-    }
+  if (!firstCallerTurnStarted && !greetingInProgress) {
+    firstCallerTurnStarted = true;
+    console.log("First caller turn detected");
+  }
+
+  if (msSinceAssistantAudio !== null && msSinceAssistantAudio < 2000) {
+    console.log("DIAG: speech_started soon after assistant audio", {
+      msSinceAssistantAudio,
+      activeResponseId,
+      lastResponseDoneAt,
+      lastCallerAudioAt,
+    });
+  }
+}
 
     if (
       (msg.type === "response.output_audio.delta" ||
@@ -582,7 +584,7 @@ Important:
     }
   });
 
-ttwilioWs.on("close", (code, reason) => {
+twilioWs.on("close", (code, reason) => {
   clearCallTimers();
 
   const callEndedAt = new Date();
