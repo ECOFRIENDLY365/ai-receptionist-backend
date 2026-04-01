@@ -582,7 +582,7 @@ Important:
     }
   });
 
-twilioWs.on("close", (code, reason) => {
+ttwilioWs.on("close", (code, reason) => {
   clearCallTimers();
 
   const callEndedAt = new Date();
@@ -594,14 +594,15 @@ twilioWs.on("close", (code, reason) => {
     try {
       if (callSid && !transcriptFinalized) {
         transcriptFinalized = true;
+
         const { error } = await supabase
           .from("calls")
           .update({
-             ended_at: callEndedAt.toISOString(),
-             duration_seconds: durationSeconds,
-             status: "completed",
-             transcript_text: buildTranscriptText(),
-           })
+            ended_at: callEndedAt.toISOString(),
+            duration_seconds: durationSeconds,
+            status: "completed",
+            transcript_text: buildTranscriptText(),
+          })
           .eq("call_sid", callSid);
 
         if (error) {
@@ -615,29 +616,29 @@ twilioWs.on("close", (code, reason) => {
     }
   })();
 
- console.log("Twilio WebSocket closed", {
-  code,
-  reason: reason ? reason.toString() : null,
-  streamSid,
-  callSid,
-  openaiReadyState: openaiWs?.readyState,
-  openaiLastActivityAgoMs: Date.now() - openaiLastActivityAt,
-  twilioLastActivityAgoMs: Date.now() - twilioLastActivityAt,
-  lastOpenAiEventType,
-  lastTwilioEventType,
-  lastCallerAudioAt,
-  lastAssistantAudioAt,
-  lastResponseCreatedAt,
-  lastResponseDoneAt,
-  twilioMediaPackets,
-  openAiAudioPackets,
-  durationSeconds,
-});
-
-    if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-      openaiWs.close();
-    }
+  console.log("Twilio WebSocket closed", {
+    code,
+    reason: reason ? reason.toString() : null,
+    streamSid,
+    callSid,
+    openaiReadyState: openaiWs?.readyState,
+    openaiLastActivityAgoMs: Date.now() - openaiLastActivityAt,
+    twilioLastActivityAgoMs: Date.now() - twilioLastActivityAt,
+    lastOpenAiEventType,
+    lastTwilioEventType,
+    lastCallerAudioAt,
+    lastAssistantAudioAt,
+    lastResponseCreatedAt,
+    lastResponseDoneAt,
+    twilioMediaPackets,
+    openAiAudioPackets,
+    durationSeconds,
   });
+
+  if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+    openaiWs.close();
+  }
+});
 
   twilioWs.on("error", (err) => {
     console.error("Twilio WebSocket error:", err);
