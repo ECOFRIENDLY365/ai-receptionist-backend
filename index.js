@@ -124,6 +124,28 @@ wss.on("connection", (twilioWs) => {
   let twilioMediaPackets = 0;
   let openAiAudioPackets = 0;
 
+const transcriptEntries = [];
+let transcriptFinalized = false;
+
+function addTranscript(role, text) {
+  if (!text || typeof text !== "string") return;
+
+  const cleaned = text.trim();
+  if (!cleaned) return;
+
+  transcriptEntries.push({
+    role,
+    text: cleaned,
+    at: new Date().toISOString(),
+  });
+}
+
+function buildTranscriptText() {
+  return transcriptEntries
+    .map(e => `${e.role}: ${e.text}`)
+    .join("\n");
+}
+
   function clearCallTimers() {
     if (heartbeatInterval) {
       clearInterval(heartbeatInterval);
@@ -268,6 +290,9 @@ Important:
         modalities: ["audio", "text"],
         input_audio_format: "g711_ulaw",
         output_audio_format: "g711_ulaw",
+        input_audio_transcription: {
+          model: "gpt-4o-mini-transcribe"
+        },
         input_audio_noise_reduction: {
           type: "far_field",
         },
@@ -349,6 +374,10 @@ Important:
       }
     }
 
+    if  (msg.type === "response.output_audio_transcript.done") {
+      addTranscript("assistant", msg.transcript);
+    }
+
     if (msg.type === "response.output_audio.done") {
       console.log("OUTPUT AUDIO DONE at", Date.now(), {
         responseId: activeResponseId,
@@ -378,7 +407,9 @@ Important:
       blockInputAudioUntil = Date.now() + 100;
     }
 
-    if (msg.type === "input_audio_buffer.speech_started") {
+    if (msg.type === "conversation.item.input_audio_transcription.completed") {
+      addTranscript("caller", msg.transcript);
+    }
       const now = Date.now();
       const msSinceAssistantAudio = lastAssistantAudioAt
         ? now - lastAssistantAudioAt
@@ -561,14 +592,16 @@ twilioWs.on("close", (code, reason) => {
 
   (async () => {
     try {
-      if (callSid) {
+      if (callSid && !transcriptFinalized) {
+        transcriptFinalized = true;
         const { error } = await supabase
           .from("calls")
           .update({
-            ended_at: callEndedAt.toISOString(),
-            duration_seconds: durationSeconds,
-            status: "completed",
-          })
+             ended_at: callEndedAt.toISOString(),
+             duration_seconds: durationSeconds,
+             status: "completed",
+             transcript_text: buildTranscriptText(),
+           })
           .eq("call_sid", callSid);
 
         if (error) {
