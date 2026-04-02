@@ -773,6 +773,12 @@ twilioWs.on("close", (code, reason) => {
     ? Math.max(0, Math.floor((callEndedAt - callStartedAt) / 1000))
     : null;
 
+console.log("CLOSE DEBUG", {
+  callSid,
+  transcriptFinalized,
+  transcriptLength: transcriptEntries.length
+});
+
   (async () => {
     try {
       if (callSid && !transcriptFinalized) {
