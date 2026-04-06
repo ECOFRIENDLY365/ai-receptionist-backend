@@ -27,6 +27,7 @@ const openaiApiKey = process.env.OPENAI_API_KEY;
 const publicBaseUrl = process.env.PUBLIC_BASE_URL;
 const OPENAI_URL = "wss://api.openai.com/v1/realtime?model=gpt-realtime";
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+const BUSINESS_TIMEZONE = "Europe/London";
 
 console.log("Startup check:", {
   hasSupabaseUrl: !!supabaseUrl,
@@ -147,12 +148,45 @@ function buildTranscriptText() {
     .join("\n");
 }
 
+
+function interruptAssistantPlayback(reason = "caller_speech_started") {
+  if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+    openaiWs.send(
+      JSON.stringify({
+        type: "response.cancel",
+      })
+    );
+  }
+
+  if (twilioWs && twilioWs.readyState === WebSocket.OPEN && streamSid) {
+    twilioWs.send(
+      JSON.stringify({
+        event: "clear",
+        streamSid,
+      })
+    );
+  }
+
+  activeResponseId = null;
+  responsePending = false;
+  assistantSpeaking = false;
+  loggedAudioStartForResponseId = null;
+  blockInputAudioUntil = 0;
+
+  console.log("Assistant interrupted", {
+    reason,
+    streamSid,
+    callSid,
+  });
+}
+
 async function runPostCallExtraction({
   callSid,
   transcriptText,
   fromNumber,
   toNumber,
   durationSeconds,
+  callStartedAtIso,
 }) {
   if (!callSid) return;
   if (!transcriptText || !transcriptText.trim()) {
@@ -255,10 +289,14 @@ async function runPostCallExtraction({
             content: [
               {
                 type: "input_text",
-                text:
-                  "You extract structured information from restaurant receptionist phone calls. " +
-                  "Be conservative. If a detail is not clearly stated, return null. " +
-                  "Do not guess names, dates, times, or phone numbers."
+                  text:
+                   "You extract structured information from restaurant receptionist phone calls. " +
+                   "Be conservative. If a detail is not clearly stated, return null. " +
+                   "Do not guess names, dates, times, or phone numbers. " +
+                   "Interpret the transcript in British English. " +
+                   "Use call_started_at and business_timezone to resolve relative dates like Friday, tomorrow, this Saturday, or next week. " +
+                   "Return booking_date as YYYY-MM-DD when the date can be resolved clearly. Otherwise return null. " +
+                   "Return booking_time as 24-hour HH:MM when clearly stated. Otherwise return null."
               }
             ]
           },
@@ -267,12 +305,14 @@ async function runPostCallExtraction({
             content: [
               {
                 type: "input_text",
-                text:
-                  `Call metadata:
+text:
+  `Call metadata:
 call_sid: ${callSid}
 from_number: ${fromNumber ?? ""}
 to_number: ${toNumber ?? ""}
 duration_seconds: ${durationSeconds ?? ""}
+call_started_at: ${callStartedAtIso ?? ""}
+business_timezone: ${BUSINESS_TIMEZONE}
 
 Transcript:
 ${transcriptText}`
@@ -364,7 +404,7 @@ ${transcriptText}`
       JSON.stringify({
         type: "response.create",
         response: {
-          modalities: ["audio", "text"],
+          modalities: ["audio"],
           instructions:
             "In British English from the first word, say exactly: Hello, Pizza Express, Peter speaking. How can I help you today?",
         },
@@ -471,6 +511,7 @@ Important:
 - do not leave long awkward pauses before replying once the caller has clearly finished speaking
 - never say phrases like "no rush", "take your time", "no worries", "of course", or "no problem" unless the caller explicitly asks for reassurance
 - do not add polite filler at the start of replies
+- never say phrases like "go ahead", "I'm listening", "please continue", or "take your time" after an interruption
 - answer the caller's request directly
 - never start a sentence you cannot finish cleanly
 - if discussing a reservation, say you can help with the reservation enquiry rather than claiming the booking is already being completed
@@ -487,14 +528,14 @@ Important:
           type: "far_field",
         },
         voice: "cedar",
-        max_response_output_tokens: 220,
+        max_response_output_tokens: 160,
         turn_detection: {
           type: "server_vad",
-          threshold: 0.84,
-          prefix_padding_ms: 300,
-          silence_duration_ms: 500,
+          threshold: 0.78,
+          prefix_padding_ms: 500,
+          silence_duration_ms: 700,
           create_response: false,
-          interrupt_response: false,
+          interrupt_response: true,
         },
       },
     };
@@ -545,7 +586,7 @@ Important:
           JSON.stringify({
             type: "response.create",
             response: {
-              modalities: ["audio", "text"],
+              modalities: ["audio"],
               metadata: {
                 trigger: "speech_stopped",
                 manualResponseId: `manual-${Date.now()}`
@@ -606,6 +647,10 @@ if (msg.type === "input_audio_buffer.speech_started") {
     console.log("First caller turn detected");
   }
 
+  if (assistantSpeaking || activeResponseId) {
+    interruptAssistantPlayback("caller_speech_started");
+  }
+
   if (msSinceAssistantAudio !== null && msSinceAssistantAudio < 2000) {
     console.log("DIAG: speech_started soon after assistant audio", {
       msSinceAssistantAudio,
@@ -615,7 +660,6 @@ if (msg.type === "input_audio_buffer.speech_started") {
     });
   }
 }
-
     if (
       (msg.type === "response.output_audio.delta" ||
         msg.type === "response.audio.delta") &&
@@ -802,12 +846,13 @@ if (error) {
   console.log("Call updated in Supabase:", callSid);
 
   runPostCallExtraction({
-    callSid,
-    transcriptText,
-    fromNumber,
-    toNumber,
-    durationSeconds,
-  });
+  callSid,
+  transcriptText,
+  fromNumber,
+  toNumber,
+  durationSeconds,
+  callStartedAtIso: callStartedAt?.toISOString?.() ?? null,
+});
 }
       }
     } catch (err) {
